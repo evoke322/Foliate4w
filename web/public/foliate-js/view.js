@@ -391,7 +391,7 @@ export class View extends HTMLElement {
                 this.#emit('draw-annotation', { draw, annotation, doc, range })
             }
         }
-        const label = this.#tocProgress.getProgress(index)?.label ?? ''
+        const label = this.#tocProgress?.getProgress(index)?.label ?? ''
         return { index, label }
     }
     deleteAnnotation(annotation) {
@@ -502,7 +502,7 @@ export class View extends HTMLElement {
             const isRange = frag instanceof Range
             const range = isRange ? frag : doc.createRange()
             if (!isRange) range.selectNodeContents(frag)
-            return this.#tocProgress.getProgress(index, range)
+            return this.#tocProgress?.getProgress(index, range)
         } catch(e) {
             console.error(e)
             console.error(`Could not get ${target}`)
@@ -557,7 +557,7 @@ export class View extends HTMLElement {
                 this.#searchResults.set(result.index, list)
                 for (const item of list) this.addAnnotation(item)
                 yield {
-                    label: this.#tocProgress.getProgress(result.index)?.label ?? '',
+                    label: this.#tocProgress?.getProgress(result.index)?.label ?? '',
                     subitems: result.subitems,
                 }
             }

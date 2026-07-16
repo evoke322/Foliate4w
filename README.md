@@ -19,8 +19,9 @@ GJS, libadwaita, WebKitGTK, Electron, and bundled Chromium runtimes.
 
 > [!IMPORTANT]
 > This project is in early development and is not release-ready yet. The basic
-> reader shell has been created, but Windows packaging, portable data isolation,
-> file associations, and end-to-end testing are still in progress.
+> reader experience and packaging skeleton are in place, but Windows runtime
+> testing and full feature parity with the GTK application are still in
+> progress.
 
 ## Goals
 
@@ -53,15 +54,44 @@ in the upstream project.
 - Open books by dragging and dropping them into the window
 - Paginated and scrolling layouts
 - Table of contents
+- Full-text search across the book or current section, with result navigation
 - Reading progress and position restore
 - Book title, author, and cover display
-- Light and dark themes
+- Light and dark interface themes plus nine reading color themes
 - Keyboard and toolbar page navigation
+- Foliate-style reader sidebar, toolbar, and bottom navigation
+- Typography controls for fonts, sizing, alignment, hyphenation, margins,
+  column limits, animation, cursor hiding, and dark-mode page inversion
+- Location navigation with remaining time, sections, publication page list,
+  landmarks, EPUB CFI copy/paste, and chapter marks on the progress bar
+- Local library with multi-book import, grid/list views, metadata search,
+  covers, progress, stable book identity, and multi-window synchronization
+- Bookmarks and searchable annotation lists
+- Highlights, underline/squiggly/strikethrough styles, custom colors,
+  annotation notes, undo, and Foliate JSON/HTML/Markdown/Org import/export
+- Footnote and endnote popovers
+- Dictionary, richer Wikipedia, and remembered-target translation lookup
+- Selection actions for citation/CFI copy, in-book search, speech, and printing
+- Illustration viewer with zoom, pan, rotation, inversion, copy, and save
+- Fullscreen, window-state restore, reload, duplicate windows, printing,
+  shortcut help, detailed errors, and an About/debug dialog
+- Simplified Chinese and English interface modes
+- Publication-defined vertical writing, right-to-left reading, and fixed layout
+- Range-based loading for books passed on the command line, avoiding an
+  additional whole-file IPC copy for large EPUB and PDF files
 
-The original Foliate also includes a library, search, bookmarks, annotations,
-dictionary lookup, text-to-speech, additional themes, and extensive reading
-preferences. These features are intended to be ported progressively; they are
-not all available in this Windows version yet.
+PDF rendering remains experimental. Text selection and lookup are available,
+but highlights and annotations are not yet supported for PDF or other
+fixed-layout publications. Lookup tools require a network connection.
+
+The original Foliate still has features not yet ported completely, including a
+full text-to-speech controller, media overlays, and OPDS catalogs.
+
+Imported library books are stored in IndexedDB together with their covers,
+metadata, progress, bookmarks, and annotations. In the portable edition this
+database remains under `Data/WebView2`. Opening an imported book with another
+Windows application currently creates a temporary copy; for very large books,
+that explicit operation can cause an additional one-time memory peak.
 
 ## Windows Packages
 
@@ -70,29 +100,23 @@ source code.
 
 ### Installer Edition
 
-The installer edition will:
+The installer edition is designed to:
 
 - be distributed as `Foliate-Windows-x64-Setup.exe`;
 - install Foliate for the current Windows user;
 - add normal uninstall information;
 - optionally install or bootstrap the WebView2 Runtime when it is missing;
-- associate supported e-book formats with Foliate;
-- open associated books when they are double-clicked in File Explorer;
+- leave existing Windows file associations and default applications unchanged;
 - store settings and application data in the normal per-user Windows
   locations.
 
-The initial file associations will use a static Foliate file icon. The original
-Linux application can extract and display book covers inside its own library,
-but it does not provide a Windows Explorer thumbnail handler.
-
-Displaying each book cover as its Explorer thumbnail would require a separate
-Windows COM shell extension implementing `IThumbnailProvider`. Such an
-extension is outside the initial release scope and would only be suitable as an
-optional installer component.
+Users can still select Foliate manually through Windows **Open with**, or pass a
+book path to the executable. The installer does not register e-book extensions
+and does not silently make Foliate the default reader.
 
 ### Portable Edition
 
-The portable edition will:
+The portable edition is designed to:
 
 - be distributed as `Foliate-Windows-x64-Portable.zip`;
 - run after extraction without installation;
@@ -223,7 +247,7 @@ The completed workflow will:
 4. install dependencies from lockfiles;
 5. build and validate the web frontend;
 6. build the Windows x64 executable;
-7. create the installer edition with file associations;
+7. create the installer edition without changing file associations;
 8. create the isolated portable directory;
 9. archive the portable directory as a ZIP file;
 10. upload both packages as workflow artifacts;
@@ -241,9 +265,11 @@ implemented and verified.
 - `src-tauri/` — lightweight native Windows shell
 - `.github/workflows/` — automated Windows builds
 
-The reader receives local files directly as browser `File` objects. This avoids
-copying entire books through JSON or Tauri IPC and keeps the Rust permission
-surface small.
+Books selected or dropped in the window are passed directly as browser `File`
+objects. A path supplied when the application starts is exposed through a
+Blob-like range reader backed by Tauri IPC. EPUB and PDF parsers can therefore
+request only the ranges they need instead of first transferring the complete
+file through IPC.
 
 ## Lightweight Packaging
 
@@ -269,7 +295,8 @@ without bundling WebView2.
   content.
 - E-book scripts and unrestricted network connections are blocked by the
   reader's content security policy.
-- External links are not opened automatically in the current implementation.
+- External links are opened only after an explicit user action and are handed
+  to the Windows default browser.
 - The portable edition will isolate all application-controlled persistent data
   beneath its local `Data` directory.
 

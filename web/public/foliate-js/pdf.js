@@ -21,12 +21,26 @@ const render = async (page, doc, zoom) => {
 
     // the canvas must be in the `PDFDocument`'s `ownerDocument`
     // (`globalThis.document` by default); that's where the fonts are loaded
-    const canvas = document.createElement('canvas')
-    canvas.height = viewport.height
-    canvas.width = viewport.width
-    const canvasContext = canvas.getContext('2d')
-    await page.render({ canvasContext, viewport }).promise
-    doc.querySelector('#canvas').replaceChildren(doc.adoptNode(canvas))
+    const renderCanvas = document.createElement('canvas')
+    renderCanvas.height = viewport.height
+    renderCanvas.width = viewport.width
+    const canvasContext = renderCanvas.getContext('2d', { alpha: false })
+    await page.render({
+        canvas: renderCanvas,
+        canvasContext,
+        viewport,
+        background: '#ffffff',
+    }).promise
+
+    // Chromium/WebView2 can clear a canvas bitmap when the node is adopted by
+    // another document. Copy the rendered pixels to a canvas owned by the PDF
+    // page document instead of moving the original canvas across documents.
+    const pageCanvas = doc.createElement('canvas')
+    pageCanvas.height = renderCanvas.height
+    pageCanvas.width = renderCanvas.width
+    pageCanvas.style.display = 'block'
+    pageCanvas.getContext('2d', { alpha: false }).drawImage(renderCanvas, 0, 0)
+    doc.querySelector('#canvas').replaceChildren(pageCanvas)
 
     const container = doc.querySelector('.textLayer')
     const textLayer = new pdfjsLib.TextLayer({
