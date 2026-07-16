@@ -1,10 +1,13 @@
 use serde::Serialize;
+#[cfg(target_os = "windows")]
+use std::collections::BTreeSet;
 use std::{
     ffi::OsStr,
     fs::{self, File},
     io::{Read, Seek, SeekFrom},
     path::{Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
+    time::UNIX_EPOCH,
 };
 use tauri::{
     ipc::Response, webview::WebviewWindowBuilder, AppHandle, PhysicalSize, Size, State, WebviewUrl,
@@ -44,12 +47,63 @@ struct WindowState {
     fullscreen: bool,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BookPathInfo {
+    path: String,
+    name: String,
+    size: u64,
+    last_modified: u64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CleanupResult {
+    files: u64,
+    bytes: u64,
+}
+
 fn is_supported_book(path: &Path) -> bool {
     path.is_file()
         && path
             .extension()
             .and_then(OsStr::to_str)
             .is_some_and(|ext| SUPPORTED_EXTENSIONS.contains(&ext.to_ascii_lowercase().as_str()))
+}
+
+fn canonical_book_path(path: impl AsRef<Path>) -> Result<PathBuf, String> {
+    let path = path.as_ref();
+    if !path.exists() {
+        return Err(format!("图书文件不存在：{}", path.display()));
+    }
+    let path = path
+        .canonicalize()
+        .map_err(|error| format!("无法解析图书路径：{error}"))?;
+    if !is_supported_book(&path) {
+        return Err(format!("不支持的图书格式：{}", path.display()));
+    }
+    Ok(path)
+}
+
+fn book_path_info(path: impl AsRef<Path>) -> Result<BookPathInfo, String> {
+    let path = canonical_book_path(path)?;
+    let metadata = fs::metadata(&path).map_err(|error| format!("无法读取图书信息：{error}"))?;
+    let last_modified = metadata
+        .modified()
+        .ok()
+        .and_then(|value| value.duration_since(UNIX_EPOCH).ok())
+        .map(|value| u64::try_from(value.as_millis()).unwrap_or(u64::MAX))
+        .unwrap_or(0);
+    Ok(BookPathInfo {
+        name: path
+            .file_name()
+            .and_then(OsStr::to_str)
+            .unwrap_or("book")
+            .to_string(),
+        path: path.to_string_lossy().into_owned(),
+        size: metadata.len(),
+        last_modified,
+    })
 }
 
 fn startup_book() -> (Option<PathBuf>, Option<String>) {
@@ -161,6 +215,72 @@ fn runtime_info(state: State<'_, RuntimeState>) -> RuntimeInfo {
     }
 }
 
+#[cfg(target_os = "windows")]
+#[tauri::command]
+fn list_system_fonts() -> Vec<String> {
+    use windows_sys::Win32::Graphics::Gdi::{
+        EnumFontFamiliesExW, GetDC, ReleaseDC, DEFAULT_CHARSET, LOGFONTW, TEXTMETRICW,
+    };
+
+    unsafe extern "system" fn collect_font(
+        log_font: *const LOGFONTW,
+        _text_metric: *const TEXTMETRICW,
+        _font_type: u32,
+        data: isize,
+    ) -> i32 {
+        if log_font.is_null() || data == 0 {
+            return 1;
+        }
+        let face = &(*log_font).lfFaceName;
+        let length = face
+            .iter()
+            .position(|value| *value == 0)
+            .unwrap_or(face.len());
+        let name = String::from_utf16_lossy(&face[..length]).trim().to_string();
+        if !name.is_empty() && !name.starts_with('@') {
+            (*(data as *mut BTreeSet<String>)).insert(name);
+        }
+        1
+    }
+
+    let mut fonts = BTreeSet::new();
+    unsafe {
+        let hdc = GetDC(std::ptr::null_mut());
+        if !hdc.is_null() {
+            let mut query = LOGFONTW::default();
+            query.lfCharSet = DEFAULT_CHARSET;
+            EnumFontFamiliesExW(
+                hdc,
+                &query,
+                Some(collect_font),
+                &mut fonts as *mut BTreeSet<String> as isize,
+                0,
+            );
+            ReleaseDC(std::ptr::null_mut(), hdc);
+        }
+    }
+    fonts.into_iter().collect()
+}
+
+#[cfg(not(target_os = "windows"))]
+#[tauri::command]
+fn list_system_fonts() -> Vec<String> {
+    [
+        "Arial",
+        "Calibri",
+        "Cambria",
+        "Consolas",
+        "Georgia",
+        "Microsoft YaHei UI",
+        "Segoe UI",
+        "SimSun",
+        "Times New Roman",
+    ]
+    .into_iter()
+    .map(str::to_string)
+    .collect()
+}
+
 #[tauri::command]
 fn get_window_state(window: WebviewWindow) -> Result<WindowState, String> {
     let size = window.inner_size().map_err(|error| error.to_string())?;
@@ -210,25 +330,117 @@ fn print_window(window: WebviewWindow) -> Result<(), String> {
     window.print().map_err(|error| error.to_string())
 }
 
+#[cfg(target_os = "windows")]
+#[tauri::command]
+fn choose_books(multiple: bool) -> Result<Vec<BookPathInfo>, String> {
+    use std::{iter, os::windows::ffi::OsStrExt, ptr};
+    use windows_sys::Win32::UI::Controls::Dialogs::{
+        CommDlgExtendedError, GetOpenFileNameW, OFN_ALLOWMULTISELECT, OFN_EXPLORER,
+        OFN_FILEMUSTEXIST, OFN_HIDEREADONLY, OFN_NOCHANGEDIR, OFN_PATHMUSTEXIST, OPENFILENAMEW,
+    };
+
+    let filter: Vec<u16> = OsStr::new(
+        "电子书 (*.epub;*.mobi;*.azw;*.azw3;*.fb2;*.fbz;*.zip;*.cbz;*.pdf)\0\
+         *.epub;*.mobi;*.azw;*.azw3;*.fb2;*.fbz;*.zip;*.cbz;*.pdf\0所有文件 (*.*)\0*.*\0",
+    )
+    .encode_wide()
+    .chain(iter::once(0))
+    .collect();
+    let title: Vec<u16> = OsStr::new(if multiple {
+        "导入图书到书库"
+    } else {
+        "打开电子书"
+    })
+    .encode_wide()
+    .chain(iter::once(0))
+    .collect();
+    let mut buffer = vec![0u16; 64 * 1024];
+    let mut dialog = OPENFILENAMEW {
+        lStructSize: std::mem::size_of::<OPENFILENAMEW>() as u32,
+        lpstrFilter: filter.as_ptr(),
+        lpstrFile: buffer.as_mut_ptr(),
+        nMaxFile: buffer.len() as u32,
+        lpstrTitle: title.as_ptr(),
+        Flags: OFN_EXPLORER
+            | OFN_FILEMUSTEXIST
+            | OFN_PATHMUSTEXIST
+            | OFN_HIDEREADONLY
+            | OFN_NOCHANGEDIR
+            | if multiple { OFN_ALLOWMULTISELECT } else { 0 },
+        ..Default::default()
+    };
+    let selected = unsafe { GetOpenFileNameW(&mut dialog) };
+    if selected == 0 {
+        let error = unsafe { CommDlgExtendedError() };
+        return if error == 0 {
+            Ok(Vec::new())
+        } else {
+            Err(format!("Windows 文件选择器错误：0x{error:04X}"))
+        };
+    }
+
+    let values = buffer
+        .split(|value| *value == 0)
+        .take_while(|value| !value.is_empty())
+        .map(String::from_utf16_lossy)
+        .collect::<Vec<_>>();
+    let paths = if values.len() <= 1 {
+        values.into_iter().map(PathBuf::from).collect::<Vec<_>>()
+    } else {
+        let directory = PathBuf::from(&values[0]);
+        values[1..]
+            .iter()
+            .map(|name| directory.join(name))
+            .collect::<Vec<_>>()
+    };
+    paths.into_iter().map(book_path_info).collect()
+}
+
+#[cfg(not(target_os = "windows"))]
+#[tauri::command]
+fn choose_books(_multiple: bool) -> Result<Vec<BookPathInfo>, String> {
+    Err("当前平台不支持 Windows 文件选择器".to_string())
+}
+
 #[tauri::command]
 fn new_window(
     book_id: Option<String>,
     app: AppHandle,
     state: State<'_, RuntimeState>,
 ) -> Result<(), String> {
+    let book_id = book_id
+        .map(|book_id| {
+            let valid = book_id.len() <= 96
+                && ["identifier:", "fingerprint:"].iter().any(|prefix| {
+                    book_id.strip_prefix(prefix).is_some_and(|digest| {
+                        digest.len() == 64 && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
+                    })
+                });
+            if valid {
+                Ok(book_id)
+            } else {
+                Err("无效的书库图书标识".to_string())
+            }
+        })
+        .transpose()?;
     let id = WINDOW_ID.fetch_add(1, Ordering::Relaxed);
-    let url = book_id
-        .map(|book_id| format!("index.html?book={book_id}"))
-        .unwrap_or_else(|| "index.html".to_string());
-    let mut builder =
-        WebviewWindowBuilder::new(&app, format!("reader-{id}"), WebviewUrl::App(url.into()))
-            .title("Foliate")
-            .inner_size(1180.0, 780.0)
-            .min_inner_size(640.0, 480.0)
-            .center()
-            .resizable(true)
-            .disable_drag_drop_handler()
-            .devtools(cfg!(debug_assertions));
+    let mut builder = WebviewWindowBuilder::new(
+        &app,
+        format!("reader-{id}"),
+        WebviewUrl::App("index.html".into()),
+    )
+    .title("Foliate")
+    .inner_size(1180.0, 780.0)
+    .min_inner_size(640.0, 480.0)
+    .center()
+    .resizable(true)
+    .disable_drag_drop_handler()
+    .devtools(cfg!(debug_assertions));
+    if let Some(book_id) = book_id {
+        builder = builder.initialization_script(format!(
+            "globalThis.__FOLIATE_STARTUP_BOOK__ = \"{book_id}\";"
+        ));
+    }
     if let Some(directory) = state.data_dir.as_ref().map(|path| path.join("WebView2")) {
         builder = builder.data_directory(directory);
     }
@@ -237,16 +449,9 @@ fn new_window(
 }
 
 #[tauri::command]
-fn read_startup_book_range(
-    begin: u64,
-    end: u64,
-    state: State<'_, RuntimeState>,
-) -> Result<Response, String> {
-    let path = state
-        .startup_book
-        .as_ref()
-        .ok_or_else(|| "没有通过启动参数传入图书".to_string())?;
-    let size = fs::metadata(path)
+fn read_book_range(path: String, begin: u64, end: u64) -> Result<Response, String> {
+    let path = canonical_book_path(path)?;
+    let size = fs::metadata(&path)
         .map_err(|error| format!("无法读取图书信息：{error}"))?
         .len();
     if begin > end || end > size {
@@ -297,27 +502,6 @@ fn open_external(url: String) -> Result<(), String> {
     }
 }
 
-fn safe_file_name(name: &str) -> String {
-    let name: String = name
-        .chars()
-        .map(|character| {
-            if matches!(
-                character,
-                '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*'
-            ) {
-                '_'
-            } else {
-                character
-            }
-        })
-        .collect();
-    if name.trim().is_empty() {
-        "book".to_string()
-    } else {
-        name
-    }
-}
-
 #[cfg(target_os = "windows")]
 fn shell_open_path(path: &Path) -> Result<(), String> {
     use std::{iter, os::windows::ffi::OsStrExt, ptr};
@@ -351,20 +535,8 @@ fn shell_open_path(path: &Path) -> Result<(), String> {
 
 #[cfg(target_os = "windows")]
 #[tauri::command]
-fn open_book_copy(
-    name: String,
-    bytes: Vec<u8>,
-    state: State<'_, RuntimeState>,
-) -> Result<(), String> {
-    let directory = state
-        .data_dir
-        .as_ref()
-        .map(|path| path.join("temp"))
-        .unwrap_or_else(std::env::temp_dir)
-        .join("Foliate");
-    fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
-    let path = directory.join(safe_file_name(&name));
-    fs::write(&path, bytes).map_err(|error| format!("无法创建临时图书副本：{error}"))?;
+fn open_book_path(path: String) -> Result<(), String> {
+    let path = canonical_book_path(path)?;
     shell_open_path(&path)
 }
 
@@ -376,12 +548,44 @@ fn open_external(_url: String) -> Result<(), String> {
 
 #[cfg(not(target_os = "windows"))]
 #[tauri::command]
-fn open_book_copy(
-    _name: String,
-    _bytes: Vec<u8>,
-    _state: State<'_, RuntimeState>,
-) -> Result<(), String> {
+fn open_book_path(_path: String) -> Result<(), String> {
     Err("当前平台不支持使用外部程序打开图书".to_string())
+}
+
+fn remove_directory_contents(path: &Path) -> Result<CleanupResult, String> {
+    let mut result = CleanupResult { files: 0, bytes: 0 };
+    if !path.exists() {
+        return Ok(result);
+    }
+    for entry in fs::read_dir(path).map_err(|error| error.to_string())? {
+        let entry = entry.map_err(|error| error.to_string())?;
+        let file_type = entry.file_type().map_err(|error| error.to_string())?;
+        if file_type.is_symlink() {
+            fs::remove_file(entry.path()).map_err(|error| error.to_string())?;
+            result.files += 1;
+        } else if file_type.is_dir() {
+            let nested = remove_directory_contents(&entry.path())?;
+            result.files += nested.files;
+            result.bytes += nested.bytes;
+            fs::remove_dir(entry.path()).map_err(|error| error.to_string())?;
+        } else {
+            let metadata = entry.metadata().map_err(|error| error.to_string())?;
+            result.files += 1;
+            result.bytes += metadata.len();
+            fs::remove_file(entry.path()).map_err(|error| error.to_string())?;
+        }
+    }
+    Ok(result)
+}
+
+#[tauri::command]
+fn clean_temporary_files(state: State<'_, RuntimeState>) -> Result<CleanupResult, String> {
+    let directory = state
+        .data_dir
+        .as_ref()
+        .map(|path| path.join("temp"))
+        .unwrap_or_else(|| std::env::temp_dir().join("Foliate"));
+    remove_directory_contents(&directory)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -399,14 +603,17 @@ pub fn run() {
         .manage(runtime)
         .invoke_handler(tauri::generate_handler![
             runtime_info,
+            list_system_fonts,
             get_window_state,
             restore_window_state,
             toggle_fullscreen,
             print_window,
+            choose_books,
             new_window,
-            read_startup_book_range,
+            read_book_range,
             open_external,
-            open_book_copy
+            open_book_path,
+            clean_temporary_files
         ])
         .setup(move |app| {
             let mut window =

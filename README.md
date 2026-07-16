@@ -62,6 +62,10 @@ in the upstream project.
 - Foliate-style reader sidebar, toolbar, and bottom navigation
 - Typography controls for fonts, sizing, alignment, hyphenation, margins,
   column limits, animation, cursor hiding, and dark-mode page inversion
+- Searchable Windows system-font choices loaded once when preferences open
+- Separate interface, reflowable e-book, PDF, and selection-tool preferences
+- Mouse-wheel page turning in paginated layouts
+- Configurable selection toolbar visibility and per-tool enable/disable choices
 - Location navigation with remaining time, sections, publication page list,
   landmarks, EPUB CFI copy/paste, and chapter marks on the progress bar
 - Local library with multi-book import, grid/list views, metadata search,
@@ -77,7 +81,8 @@ in the upstream project.
   shortcut help, detailed errors, and an About/debug dialog
 - Simplified Chinese and English interface modes
 - Publication-defined vertical writing, right-to-left reading, and fixed layout
-- Range-based loading for books passed on the command line, avoiding an
+- Range-based loading for books selected through the native Windows picker,
+  opened from the library, or passed on the command line, avoiding an
   additional whole-file IPC copy for large EPUB and PDF files
 
 PDF rendering remains experimental. Text selection and lookup are available,
@@ -87,11 +92,12 @@ fixed-layout publications. Lookup tools require a network connection.
 The original Foliate still has features not yet ported completely, including a
 full text-to-speech controller, media overlays, and OPDS catalogs.
 
-Imported library books are stored in IndexedDB together with their covers,
-metadata, progress, bookmarks, and annotations. In the portable edition this
-database remains under `Data/WebView2`. Opening an imported book with another
-Windows application currently creates a temporary copy; for very large books,
-that explicit operation can cause an additional one-time memory peak.
+Installed builds store the original Windows path for an imported library book,
+not another copy of the complete book. IndexedDB contains that path together
+with the cover, metadata, progress, bookmarks, and annotations. In the portable
+edition this database remains under `Data/WebView2`. Moving or deleting the
+original book makes the library link unavailable until the file is imported
+again. The settings page can remove retained reading data and temporary files.
 
 ## Windows Packages
 
@@ -105,14 +111,16 @@ The installer edition is designed to:
 - be distributed as `Foliate-Windows-x64-Setup.exe`;
 - install Foliate for the current Windows user;
 - add normal uninstall information;
-- optionally install or bootstrap the WebView2 Runtime when it is missing;
-- leave existing Windows file associations and default applications unchanged;
+- show the interactive Microsoft WebView2 bootstrapper when the Runtime is
+  missing, allowing the user to confirm or cancel installation;
+- register supported book formats so Foliate appears as an **Open with** choice;
+- leave the user's current default applications unchanged;
 - store settings and application data in the normal per-user Windows
   locations.
 
-Users can still select Foliate manually through Windows **Open with**, or pass a
-book path to the executable. The installer does not register e-book extensions
-and does not silently make Foliate the default reader.
+Users can select Foliate manually through Windows **Open with**, or pass a book
+path to the executable. Registration only advertises that Foliate can open the
+supported formats; it does not silently make Foliate the default reader.
 
 ### Portable Edition
 
@@ -154,9 +162,10 @@ For release packages:
 - Microsoft WebView2 Runtime
 
 Windows 11 and most maintained Windows 10 installations already include the
-Evergreen WebView2 Runtime. The installer edition may bootstrap it when
-required. To remain self-contained and avoid system changes, the portable
-edition expects WebView2 to be available already.
+Evergreen WebView2 Runtime. When it is missing, the installer edition starts
+the bootstrapper interactively instead of installing it silently. To remain
+self-contained and avoid system changes, the portable edition expects WebView2
+to be available already.
 
 For development:
 
@@ -247,15 +256,17 @@ The completed workflow will:
 4. install dependencies from lockfiles;
 5. build and validate the web frontend;
 6. build the Windows x64 executable;
-7. create the installer edition without changing file associations;
+7. create the installer edition with Open-with registration but without
+   replacing the user's default applications;
 8. create the isolated portable directory;
 9. archive the portable directory as a ZIP file;
 10. upload both packages as workflow artifacts;
-11. attach both packages to GitHub Releases for version tags.
+11. attach both packages to the published GitHub Release that triggered the
+    workflow.
 
-The current workflow is only an initial installer build skeleton. The
-two-edition packaging and release steps described above still need to be
-implemented and verified.
+Pushes to `main` or `master`, pull requests, and tag pushes do not trigger
+packaging. Publish a GitHub Release (for example with tag `v0.1.2`) to start the
+Windows build and upload both packages to that Release.
 
 ## Architecture
 
@@ -265,11 +276,13 @@ implemented and verified.
 - `src-tauri/` — lightweight native Windows shell
 - `.github/workflows/` — automated Windows builds
 
-Books selected or dropped in the window are passed directly as browser `File`
-objects. A path supplied when the application starts is exposed through a
+The installed application uses the native Windows file picker so selected
+books retain their filesystem paths. Those paths are exposed through a
 Blob-like range reader backed by Tauri IPC. EPUB and PDF parsers can therefore
 request only the ranges they need instead of first transferring the complete
-file through IPC.
+file through IPC. A single book dropped directly onto the reader can still be
+opened for the current session, but importing into the library uses the native
+picker because browser drag-and-drop does not provide a reliable Windows path.
 
 ## Lightweight Packaging
 

@@ -28,6 +28,9 @@
                     <button class="icon-button" id="theme-button" type="button" title="切换深色模式" aria-label="切换深色模式">
                         <i data-lucide="moon"></i>
                     </button>
+                    <button class="icon-button" id="library-preferences-button" type="button" title="设置" aria-label="设置">
+                        <i data-lucide="settings-2"></i>
+                    </button>
                     <button class="command-button" id="import-button" type="button">
                         <i data-lucide="plus"></i>
                         <span>导入图书</span>
@@ -96,9 +99,21 @@
                             <option value="book">整本书</option>
                             <option value="section">当前章节</option>
                         </select>
-                        <label><input id="search-whole-words" type="checkbox">完整单词</label>
-                        <label><input id="search-match-case" type="checkbox">区分大小写</label>
-                        <label><input id="search-diacritics" type="checkbox">区分音调符号</label>
+                        <label class="search-option-button" title="完整单词">
+                            <input id="search-whole-words" type="checkbox">
+                            <i data-lucide="whole-word"></i>
+                            <span class="visually-hidden">完整单词</span>
+                        </label>
+                        <label class="search-option-button" title="区分大小写">
+                            <input id="search-match-case" type="checkbox">
+                            <i data-lucide="case-sensitive"></i>
+                            <span class="visually-hidden">区分大小写</span>
+                        </label>
+                        <label class="search-option-button" title="区分音调符号">
+                            <input id="search-diacritics" type="checkbox">
+                            <i data-lucide="baseline"></i>
+                            <span class="visually-hidden">区分音调符号</span>
+                        </label>
                     </div>
                 </div>
 
@@ -160,7 +175,6 @@
                     <button class="icon-button raised" id="sidebar-open" type="button" title="显示侧栏" aria-label="显示侧栏" hidden>
                         <i data-lucide="panel-left-open"></i>
                     </button>
-                    <span class="reader-book-title" id="toolbar-title"></span>
                 </div>
                 <div id="reader-surface" class="reader-surface" tabindex="-1"></div>
                 <footer class="reader-navbar">
@@ -191,7 +205,7 @@
         <div id="selection-popover" class="selection-popover popover" hidden>
             <button type="button" data-selection-action="copy"><i data-lucide="copy"></i><span>复制</span></button>
             <button type="button" data-selection-action="copy-citation"><i data-lucide="copy-check"></i><span>引用</span></button>
-            <button type="button" data-selection-action="copy-cfi"><i data-lucide="bookmark"></i><span>CFI</span></button>
+            <button type="button" data-selection-action="copy-cfi" title="复制 EPUB CFI 位置标识"><i data-lucide="bookmark"></i><span>书签</span></button>
             <button type="button" data-selection-action="find"><i data-lucide="search"></i><span>书内查找</span></button>
             <button type="button" data-selection-action="speak"><i data-lucide="volume-2"></i><span>朗读</span></button>
             <button type="button" data-selection-action="highlight"><i data-lucide="highlighter"></i><span>高亮</span></button>
@@ -271,124 +285,162 @@
         <dialog id="preferences-dialog" class="content-dialog">
             <form method="dialog" class="dialog-card preferences-card">
                 <header>
-                    <h2>阅读设置</h2>
+                    <h2>设置</h2>
                     <button class="icon-button" value="close" aria-label="关闭"><i data-lucide="x"></i></button>
                 </header>
                 <main>
-                    <label class="preference-row">
-                        <span>界面外观</span>
-                        <select id="theme-select">
-                            <option value="system">跟随系统</option>
-                            <option value="light">浅色</option>
-                            <option value="dark">深色</option>
-                        </select>
-                    </label>
-                    <label class="preference-row">
-                        <span>界面语言</span>
-                        <select id="language-select">
-                            <option value="zh-CN">简体中文</option>
-                            <option value="en">English</option>
-                        </select>
-                    </label>
-                    <h3>字体</h3>
-                    <label class="preference-row">
-                        <span>阅读主题</span>
-                        <select id="book-theme-select">
-                            <option value="default">默认</option>
-                            <option value="gray">灰色</option>
-                            <option value="sepia">羊皮纸</option>
-                            <option value="grass">草绿</option>
-                            <option value="cherry">樱桃</option>
-                            <option value="sky">天空</option>
-                            <option value="solarized">Solarized</option>
-                            <option value="gruvbox">Gruvbox</option>
-                            <option value="nord">Nord</option>
-                        </select>
-                    </label>
-                    <label class="preference-row range-row">
-                        <span>默认字号 <output id="font-size-output"></output></span>
-                        <input id="font-size-input" type="range" min="10" max="32" step="1">
-                    </label>
-                    <label class="preference-row range-row">
-                        <span>最小字号 <output id="minimum-font-size-output"></output></span>
-                        <input id="minimum-font-size-input" type="range" min="0" max="24" step="1">
-                    </label>
-                    <label class="preference-row">
-                        <span>默认字体</span>
-                        <select id="default-font-select">
-                            <option value="serif">衬线体</option>
-                            <option value="sans-serif">无衬线体</option>
-                        </select>
-                    </label>
-                    <label class="preference-row switch-row">
-                        <span>覆盖出版商字体</span>
-                        <input id="override-font-input" type="checkbox">
-                    </label>
-                    <label class="preference-row">
-                        <span>衬线字体</span>
-                        <input id="serif-font-input" type="text" spellcheck="false">
-                    </label>
-                    <label class="preference-row">
-                        <span>无衬线字体</span>
-                        <input id="sans-font-input" type="text" spellcheck="false">
-                    </label>
-                    <label class="preference-row">
-                        <span>等宽字体</span>
-                        <input id="monospace-font-input" type="text" spellcheck="false">
-                    </label>
-                    <h3>布局</h3>
-                    <label class="preference-row">
-                        <span>布局</span>
-                        <select id="flow-select">
-                            <option value="paginated">分页</option>
-                            <option value="scrolled">滚动</option>
-                        </select>
-                    </label>
-                    <label class="preference-row range-row">
-                        <span>行距 <output id="line-height-output"></output></span>
-                        <input id="line-height-input" type="range" min="1" max="3" step="0.05">
-                    </label>
-                    <label class="preference-row switch-row">
-                        <span>两端对齐</span>
-                        <input id="justify-input" type="checkbox">
-                    </label>
-                    <label class="preference-row switch-row">
-                        <span>自动断词</span>
-                        <input id="hyphenate-input" type="checkbox">
-                    </label>
-                    <label class="preference-row range-row">
-                        <span>页边距 <output id="page-margin-output"></output></span>
-                        <input id="page-margin-input" type="range" min="0" max="100" step="2">
-                    </label>
-                    <label class="preference-row range-row">
-                        <span>最大行宽 <output id="page-width-output"></output></span>
-                        <input id="page-width-input" type="range" min="300" max="1600" step="20">
-                    </label>
-                    <label class="preference-row range-row">
-                        <span>最大页面高度 <output id="page-height-output"></output></span>
-                        <input id="page-height-input" type="range" min="400" max="2400" step="40">
-                    </label>
-                    <label class="preference-row range-row">
-                        <span>最大列数 <output id="max-columns-output"></output></span>
-                        <input id="max-columns-input" type="range" min="1" max="4" step="1">
-                    </label>
-                    <h3>行为</h3>
-                    <label class="preference-row switch-row">
-                        <span>减少翻页动画</span>
-                        <input id="reduce-animation-input" type="checkbox">
-                    </label>
-                    <label class="preference-row switch-row">
-                        <span>暗色模式反色</span>
-                        <input id="invert-dark-input" type="checkbox">
-                    </label>
-                    <label class="preference-row switch-row">
-                        <span>阅读时自动隐藏光标</span>
-                        <input id="autohide-cursor-input" type="checkbox">
-                    </label>
-                    <p class="preference-note">竖排、从右向左阅读和固定版式会遵循图书自身的排版信息。</p>
+                    <nav class="preferences-tabs" aria-label="设置分类">
+                        <button type="button" data-preferences-tab="interface" class="selected"><i data-lucide="settings-2"></i><span>界面设置</span></button>
+                        <button type="button" data-preferences-tab="reading"><i data-lucide="book-open"></i><span>电子书阅读</span></button>
+                        <button type="button" data-preferences-tab="pdf"><i data-lucide="file-text"></i><span>PDF 阅读</span></button>
+                        <button type="button" data-preferences-tab="selection"><i data-lucide="text-select"></i><span>划词工具</span></button>
+                    </nav>
+                    <div class="preferences-panels">
+                        <section data-preferences-panel="interface">
+                            <label class="preference-row">
+                                <span>界面外观</span>
+                                <select id="theme-select">
+                                    <option value="system">跟随系统</option>
+                                    <option value="light">浅色</option>
+                                    <option value="dark">深色</option>
+                                </select>
+                            </label>
+                            <h3>存储清理</h3>
+                            <div class="cleanup-settings">
+                                <button id="cleanup-retained-data" type="button">清理已移除图书的阅读数据</button>
+                                <button id="cleanup-temporary-files" type="button">清理临时文件</button>
+                            </div>
+                            <p class="preference-note" id="cleanup-status">清理操作不会删除仍在书库中的阅读进度、批注或书签，也不会删除原始图书文件。</p>
+                            <label class="preference-row">
+                                <span>界面语言</span>
+                                <select id="language-select">
+                                    <option value="zh-CN">简体中文</option>
+                                    <option value="en">English</option>
+                                </select>
+                            </label>
+                        </section>
+                        <section data-preferences-panel="reading" hidden>
+                            <h3>字体与主题</h3>
+                            <label class="preference-row">
+                                <span>阅读主题</span>
+                                <select id="book-theme-select">
+                                    <option value="default">默认</option>
+                                    <option value="gray">灰色</option>
+                                    <option value="sepia">羊皮纸</option>
+                                    <option value="grass">草绿</option>
+                                    <option value="cherry">樱桃</option>
+                                    <option value="sky">天空</option>
+                                    <option value="solarized">Solarized</option>
+                                    <option value="gruvbox">Gruvbox</option>
+                                    <option value="nord">Nord</option>
+                                </select>
+                            </label>
+                            <label class="preference-row range-row">
+                                <span>默认字号 <output id="font-size-output"></output></span>
+                                <input id="font-size-input" type="range" min="10" max="32" step="1">
+                            </label>
+                            <label class="preference-row range-row">
+                                <span>最小字号 <output id="minimum-font-size-output"></output></span>
+                                <input id="minimum-font-size-input" type="range" min="0" max="24" step="1">
+                            </label>
+                            <label class="preference-row">
+                                <span>默认字体</span>
+                                <select id="default-font-select">
+                                    <option value="serif">衬线体</option>
+                                    <option value="sans-serif">无衬线体</option>
+                                </select>
+                            </label>
+                            <label class="preference-row switch-row">
+                                <span>覆盖出版商字体</span>
+                                <input id="override-font-input" type="checkbox">
+                            </label>
+                            <label class="preference-row">
+                                <span>衬线字体</span>
+                                <input id="serif-font-input" type="text" list="system-fonts" spellcheck="false" autocomplete="off">
+                            </label>
+                            <label class="preference-row">
+                                <span>无衬线字体</span>
+                                <input id="sans-font-input" type="text" list="system-fonts" spellcheck="false" autocomplete="off">
+                            </label>
+                            <label class="preference-row">
+                                <span>等宽字体</span>
+                                <input id="monospace-font-input" type="text" list="system-fonts" spellcheck="false" autocomplete="off">
+                            </label>
+                            <p class="preference-note" id="font-list-status">打开设置时读取 Windows 字体列表；选择字体会自动启用“覆盖出版商字体”。</p>
+                            <h3>布局</h3>
+                            <label class="preference-row">
+                                <span>布局</span>
+                                <select id="flow-select">
+                                    <option value="paginated">分页</option>
+                                    <option value="scrolled">滚动</option>
+                                </select>
+                            </label>
+                            <label class="preference-row range-row">
+                                <span>行距 <output id="line-height-output"></output></span>
+                                <input id="line-height-input" type="range" min="1" max="3" step="0.05">
+                            </label>
+                            <label class="preference-row switch-row"><span>两端对齐</span><input id="justify-input" type="checkbox"></label>
+                            <label class="preference-row switch-row"><span>自动断词</span><input id="hyphenate-input" type="checkbox"></label>
+                            <label class="preference-row range-row">
+                                <span>页边距 <output id="page-margin-output"></output></span>
+                                <input id="page-margin-input" type="range" min="0" max="100" step="2">
+                            </label>
+                            <label class="preference-row range-row">
+                                <span>最大行宽 <output id="page-width-output"></output></span>
+                                <input id="page-width-input" type="range" min="300" max="1600" step="20">
+                            </label>
+                            <label class="preference-row range-row">
+                                <span>最大页面高度 <output id="page-height-output"></output></span>
+                                <input id="page-height-input" type="range" min="400" max="2400" step="40">
+                            </label>
+                            <label class="preference-row range-row">
+                                <span>最大列数 <output id="max-columns-output"></output></span>
+                                <input id="max-columns-input" type="range" min="1" max="4" step="1">
+                            </label>
+                            <h3>行为</h3>
+                            <label class="preference-row switch-row"><span>减少翻页动画</span><input id="reduce-animation-input" type="checkbox"></label>
+                            <label class="preference-row switch-row"><span>暗色模式反色</span><input id="invert-dark-input" type="checkbox"></label>
+                            <label class="preference-row switch-row"><span>阅读时自动隐藏光标</span><input id="autohide-cursor-input" type="checkbox"></label>
+                            <p class="preference-note">foliate-js 会遵循出版物声明的竖排、从右向左和固定版式；当前没有可靠的“强制竖排改横排”转换能力。</p>
+                        </section>
+                        <section data-preferences-panel="pdf" hidden>
+                            <label class="preference-row">
+                                <span>页面缩放</span>
+                                <select id="pdf-zoom-select">
+                                    <option value="fit-page">适合页面</option>
+                                    <option value="fit-width">适合宽度</option>
+                                    <option value="1">100%</option>
+                                    <option value="1.25">125%</option>
+                                    <option value="1.5">150%</option>
+                                    <option value="2">200%</option>
+                                </select>
+                            </label>
+                            <label class="preference-row switch-row"><span>鼠标滚轮翻页</span><input id="pdf-wheel-input" type="checkbox"></label>
+                            <label class="preference-row switch-row"><span>暗色模式反色</span><input id="pdf-invert-dark-input" type="checkbox"></label>
+                            <p class="preference-note">PDF 是固定版式，字号、字体、行距和分栏等电子书排版设置不会应用到 PDF。</p>
+                        </section>
+                        <section data-preferences-panel="selection" hidden>
+                            <label class="preference-row switch-row"><span>显示划词工具条</span><input id="selection-toolbar-input" type="checkbox"></label>
+                            <h3>工具</h3>
+                            <div class="selection-tool-settings">
+                                <label><input type="checkbox" data-selection-tool="copy">复制</label>
+                                <label><input type="checkbox" data-selection-tool="copy-citation">引用</label>
+                                <label><input type="checkbox" data-selection-tool="copy-cfi">书签</label>
+                                <label><input type="checkbox" data-selection-tool="find">书内查找</label>
+                                <label><input type="checkbox" data-selection-tool="speak">朗读</label>
+                                <label><input type="checkbox" data-selection-tool="highlight">高亮</label>
+                                <label><input type="checkbox" data-selection-tool="dictionary">词典</label>
+                                <label><input type="checkbox" data-selection-tool="wikipedia">Wikipedia</label>
+                                <label><input type="checkbox" data-selection-tool="translate">翻译</label>
+                                <label><input type="checkbox" data-selection-tool="print">打印</label>
+                            </div>
+                            <p class="preference-note">此处“书签”用于复制 EPUB CFI 精确位置标识，不会直接添加到书签列表。PDF 不提供 CFI。</p>
+                        </section>
+                    </div>
                 </main>
             </form>
         </dialog>
+        <datalist id="system-fonts"></datalist>
 
         <dialog id="location-dialog" class="content-dialog">
             <div class="dialog-card location-card">
@@ -413,8 +465,8 @@
                         <span>章节</span>
                         <span class="linked-input"><input id="section-input" type="number" min="1"><span id="section-total">/ —</span><button id="section-go" type="button">转到</button></span>
                     </label>
-                    <label class="location-row">
-                        <span>EPUB CFI</span>
+                    <label class="location-row" id="cfi-location-row">
+                        <span>EPUB 位置标识（CFI）</span>
                         <span class="linked-input cfi-input"><input id="cfi-input" type="text" spellcheck="false"><button id="cfi-copy" type="button">复制</button><button id="cfi-paste" type="button">粘贴</button><button id="cfi-go" type="button">转到</button></span>
                     </label>
                     <label class="location-row" id="landmarks-row">
@@ -449,7 +501,7 @@
                 </header>
                 <main class="command-grid">
                     <button id="reload-book" type="button"><i data-lucide="refresh-cw"></i>重新加载</button>
-                    <button id="new-window-book" type="button"><i data-lucide="copy-plus"></i>在新窗口打开副本</button>
+                    <button id="new-window-book" type="button"><i data-lucide="copy-plus"></i>在新窗口打开</button>
                     <button id="fullscreen-button" type="button"><i data-lucide="maximize-2"></i>全屏</button>
                     <button id="print-book" type="button"><i data-lucide="printer"></i>打印整本书</button>
                     <button id="import-annotations" type="button"><i data-lucide="download"></i>导入批注</button>
@@ -497,7 +549,7 @@
                 <header><h2>关于 Foliate for Windows</h2><button class="icon-button" type="button" data-dialog-close aria-label="关闭"><i data-lucide="x"></i></button></header>
                 <main>
                     <img src="/assets/foliate.svg" alt="" width="84" height="84">
-                    <h3>Foliate for Windows <span id="about-version">0.1.0</span></h3>
+                    <h3>Foliate for Windows <span id="about-version">0.1.2</span></h3>
                     <p>基于 Foliate、foliate-js、Tauri、WebView2 和 PDF.js 的轻量电子书阅读器。</p>
                     <details><summary>许可证与依赖</summary><pre>Foliate for Windows — GPL-3.0-or-later
 Foliate — GPL-3.0-or-later

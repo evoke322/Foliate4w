@@ -1,6 +1,6 @@
 [package]
 name = "foliate4w"
-version = "0.1.0"
+version = "0.1.2"
 description = "Foliate e-book reader for Windows"
 authors = ["Foliate contributors"]
 edition = "2021"
@@ -19,6 +19,8 @@ tauri = { version = "2.11", features = [] }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = [
+    "Win32_Graphics_Gdi",
+    "Win32_UI_Controls_Dialogs",
     "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
 ] }

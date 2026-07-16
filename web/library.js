@@ -158,20 +158,15 @@ export class LibraryStore extends EventTarget {
         }
         const localPosition = localStorage.getItem(`position:${identity.id}`)
         const now = new Date().toISOString()
-        const blob = file instanceof Blob
-            ? file
-            : new Blob([await file.arrayBuffer()], {
-                type: file.type || 'application/octet-stream',
-            })
         const record = {
             id: identity.id,
             identifier: identity.identifier,
             fingerprint: identity.fingerprint,
             name: file.name,
-            type: file.type || blob.type,
+            type: file.type || 'application/octet-stream',
             size: file.size,
             lastModified: file.lastModified || 0,
-            blob,
+            sourcePath: file.sourcePath || '',
             cover: inspected.cover ?? existing?.cover ?? null,
             metadata,
             title: inspected.title,
@@ -185,6 +180,10 @@ export class LibraryStore extends EventTarget {
             lastOpened: existing?.lastOpened ?? '',
             modified: now,
         }
+        // Installed builds keep only the original Windows path. If this record
+        // came from an older version, importing the original file again also
+        // removes the embedded Blob copy.
+        if (!record.sourcePath && !globalThis.__TAURI__) record.blob = file
         await this.put(record)
         localStorage.removeItem(`reader-data:${identity.id}`)
         localStorage.removeItem(`position:${identity.id}`)

@@ -1,8 +1,10 @@
 import {
+    Baseline,
     BookMarked,
     BookOpen,
     Bookmark,
     BookmarkCheck,
+    CaseSensitive,
     ChevronLeft,
     ChevronRight,
     Copy,
@@ -10,6 +12,8 @@ import {
     CopyPlus,
     Contrast,
     Download,
+    ExternalLink,
+    FileText,
     FolderOpen,
     Grid2X2,
     Highlighter,
@@ -32,10 +36,12 @@ import {
     Search,
     Settings2,
     Sun,
+    TextSelect,
     Trash2,
     Undo2,
     Upload,
     Volume2,
+    WholeWord,
     X,
     ZoomIn,
     ZoomOut,
@@ -117,10 +123,12 @@ const bookThemes = {
     },
 }
 const icons = {
+    Baseline,
     BookMarked,
     BookOpen,
     Bookmark,
     BookmarkCheck,
+    CaseSensitive,
     ChevronLeft,
     ChevronRight,
     Copy,
@@ -128,6 +136,8 @@ const icons = {
     CopyPlus,
     Contrast,
     Download,
+    ExternalLink,
+    FileText,
     FolderOpen,
     Grid2X2,
     Highlighter,
@@ -150,10 +160,12 @@ const icons = {
     Search,
     Settings2,
     Sun,
+    TextSelect,
     Trash2,
     Undo2,
     Upload,
     Volume2,
+    WholeWord,
     X,
     ZoomIn,
     ZoomOut,
@@ -203,6 +215,15 @@ const storedBoolean = (key, fallback) => {
     const value = localStorage.getItem(key)
     return value == null ? fallback : value === 'true'
 }
+const selectionTools = [
+    'copy', 'copy-citation', 'copy-cfi', 'find', 'speak',
+    'highlight', 'dictionary', 'wikipedia', 'translate', 'print',
+]
+let selectionToolbarEnabled = storedBoolean('selection-toolbar-enabled', true)
+const selectionToolEnabled = Object.fromEntries(selectionTools.map(action => [
+    action,
+    storedBoolean(`selection-tool-${action}`, true),
+]))
 const formatDuration = seconds => {
     if (!Number.isFinite(seconds) || seconds < 0) return '—'
     const minutes = Math.max(1, Math.round(seconds / 60))
@@ -224,7 +245,8 @@ const toArrayBuffer = value => {
 }
 
 class NativeBookSlice {
-    constructor(start, end, type = '') {
+    constructor(path, start, end, type = '') {
+        this.path = path
         this.start = start
         this.end = end
         this.size = end - start
@@ -232,7 +254,8 @@ class NativeBookSlice {
     }
 
     async arrayBuffer() {
-        return toArrayBuffer(await invoke('read_startup_book_range', {
+        return toArrayBuffer(await invoke('read_book_range', {
+            path: this.path,
             begin: this.start,
             end: this.end,
         }))
@@ -244,12 +267,13 @@ class NativeBookSlice {
 }
 
 class NativeBookFile extends NativeBookSlice {
-    constructor(path, size) {
+    constructor(path, size, lastModified = 0) {
         const name = path.split(/[\\/]/).pop() || 'book'
         const extension = getExtension(name)
-        super(0, size, mimeTypes[extension] || 'application/octet-stream')
+        super(path, 0, size, mimeTypes[extension] || 'application/octet-stream')
         this.name = name
-        this.lastModified = 0
+        this.lastModified = lastModified
+        this.sourcePath = path
     }
 
     slice(start = 0, end = this.size, type = '') {
@@ -258,9 +282,12 @@ class NativeBookFile extends NativeBookSlice {
             : Math.min(value, this.size)
         const begin = normalize(Number(start) || 0)
         const finish = Math.max(begin, normalize(end == null ? this.size : Number(end)))
-        return new NativeBookSlice(begin, finish, type)
+        return new NativeBookSlice(this.path, begin, finish, type)
     }
 }
+
+const nativeBookFromInfo = info =>
+    new NativeBookFile(info.path, Number(info.size), Number(info.lastModified) || 0)
 
 const readerCSS = settings => {
     const theme = currentTheme()
@@ -392,6 +419,9 @@ class Reader {
     reduceAnimation = storedBoolean('reader-reduce-animation', false)
     invertDark = storedBoolean('reader-invert-dark', false)
     autohideCursor = storedBoolean('reader-autohide-cursor', false)
+    pdfZoom = localStorage.getItem('pdf-zoom') || 'fit-page'
+    pdfWheel = storedBoolean('pdf-wheel', true)
+    pdfInvertDark = storedBoolean('pdf-invert-dark', false)
     positionKey = null
     dataKey = null
     annotations = []
@@ -558,6 +588,7 @@ class Reader {
 
     onDocumentLoad({ doc, index }) {
         doc.addEventListener('keydown', keyboardNavigation)
+        doc.addEventListener('wheel', readerWheelNavigation, { passive: false })
         doc.addEventListener('dblclick', event => {
             const image = event.target.closest?.('img, svg')
             if (image) openImageViewer(image).catch(error => {
@@ -566,6 +597,7 @@ class Reader {
             })
         })
         doc.addEventListener('pointerup', () => {
+            if (!selectionToolbarEnabled) return
             const selection = doc.getSelection()
             const range = getSelectionRange(selection)
             if (!range) return
@@ -628,7 +660,6 @@ class Reader {
         const author = formatContributor(metadata.author)
         document.title = `${title} - Foliate`
         $('#book-title').textContent = title
-        $('#toolbar-title').textContent = title
         $('#book-author').textContent = author
         $('#book-author').hidden = !author
 
@@ -697,6 +728,7 @@ class Reader {
             return option
         }))
         $('#landmarks-row').hidden = landmarks.length === 0
+        $('#cfi-location-row').hidden = this.view.isFixedLayout
     }
 
     onRelocate(detail) {
@@ -726,7 +758,10 @@ class Reader {
         this.view.toggleAttribute('autohide-cursor', this.autohideCursor)
         renderer.toggleAttribute('animated', !this.reduceAnimation)
         if (this.view.isFixedLayout) {
-            renderer.setAttribute('zoom', 'fit-page')
+            renderer.setAttribute('zoom',
+                getExtension(this.currentFile?.name ?? '') === 'pdf'
+                    ? this.pdfZoom
+                    : 'fit-page')
             return
         }
         renderer.setAttribute('flow', this.flow)
@@ -742,7 +777,10 @@ class Reader {
         const palette = bookThemes[this.bookTheme] ?? bookThemes.default
         const colors = currentTheme() === 'dark' ? palette.dark : palette.light
         document.documentElement.style.setProperty('--reader-bg', colors.bg)
-        this.view?.toggleAttribute('invert', currentTheme() === 'dark' && this.invertDark)
+        const invert = getExtension(this.currentFile?.name ?? '') === 'pdf'
+            ? this.pdfInvertDark
+            : this.invertDark
+        this.view?.toggleAttribute('invert', currentTheme() === 'dark' && invert)
         if (!this.view?.renderer || this.view.isFixedLayout) return
         this.view.renderer.setStyles?.(readerCSS(this))
     }
@@ -1154,10 +1192,14 @@ const showToast = (message, actionLabel = '', action = null) => {
     }, action ? 6000 : 3500)
 }
 
-const fileFromRecord = record => new File([record.blob], record.name, {
-    type: record.type || record.blob?.type || 'application/octet-stream',
-    lastModified: record.lastModified || 0,
-})
+const fileFromRecord = record => record.sourcePath
+    ? new NativeBookFile(record.sourcePath, record.size, record.lastModified)
+    : record.blob instanceof Blob
+        ? new File([record.blob], record.name, {
+            type: record.type || record.blob.type || 'application/octet-stream',
+            lastModified: record.lastModified || 0,
+        })
+        : null
 
 const inspectBook = async file => {
     await loadReaderEngine()
@@ -1187,6 +1229,10 @@ const importBooks = async files => {
     const books = Array.from(files ?? []).filter(file =>
         supportedExtensions.includes(getExtension(file.name)))
     if (!books.length) return
+    if (invoke && books.some(file => !file.sourcePath)) {
+        showToast('安装版无法从网页拖放取得文件路径，请使用“导入图书”按钮')
+        return
+    }
     $('#loading').hidden = false
     const status = $('#loading span:last-child')
     try {
@@ -1226,10 +1272,23 @@ const bookMatches = (record, query) => {
     return haystack.includes(query.toLocaleLowerCase())
 }
 
-const openLibraryRecord = record =>
-    openFile(fileFromRecord(record), record.id, record)
+const openLibraryRecord = record => {
+    const file = fileFromRecord(record)
+    if (!file) {
+        showToast('该书库条目没有可用文件路径，请重新导入原始文件')
+        return
+    }
+    return openFile(file, record.id, record)
+}
 
 const openRecordExternally = async record => {
+    if (invoke && record.sourcePath) {
+        await invoke('open_book_path', { path: record.sourcePath })
+        return
+    }
+    if (!record.blob) {
+        throw new Error('原始图书文件路径不可用，请重新导入图书')
+    }
     if (!invoke) {
         const link = document.createElement('a')
         link.href = URL.createObjectURL(record.blob)
@@ -1239,8 +1298,7 @@ const openRecordExternally = async record => {
         showToast('浏览器版本已将图书导出，请使用其他程序打开')
         return
     }
-    const bytes = Array.from(new Uint8Array(await record.blob.arrayBuffer()))
-    await invoke('open_book_copy', { name: record.name, bytes })
+    throw new Error('旧版书库副本不能直接外部打开，请重新导入原始文件')
 }
 
 const removeLibraryRecord = async record => {
@@ -1261,6 +1319,42 @@ const removeLibraryRecord = async record => {
     showToast('已从书库删除')
 }
 
+const cleanupRetainedReadingData = async () => {
+    const ids = new Set((await library.list()).map(record => record.id))
+    const keys = []
+    for (let index = 0; index < localStorage.length; index++) {
+        const key = localStorage.key(index)
+        const match = /^(?:reader-data|position):(.+)$/.exec(key)
+        if (match && !ids.has(match[1])) keys.push(key)
+    }
+    if (!keys.length) {
+        $('#cleanup-status').textContent = '没有已移除图书留下的阅读数据。'
+        return
+    }
+    if (!confirm(`确定清理 ${keys.length} 项已移除图书的阅读进度、批注和书签吗？`))
+        return
+    for (const key of keys) localStorage.removeItem(key)
+    $('#cleanup-status').textContent = `已清理 ${keys.length} 项残留阅读数据。`
+}
+
+const cleanupTemporaryFiles = async () => {
+    if (!invoke) {
+        $('#cleanup-status').textContent = '浏览器预览模式没有应用临时目录。'
+        return
+    }
+    try {
+        const result = await invoke('clean_temporary_files')
+        const size = result.bytes < 1024 * 1024
+            ? `${Math.round(result.bytes / 1024)} KB`
+            : `${(result.bytes / 1024 / 1024).toFixed(1)} MB`
+        $('#cleanup-status').textContent =
+            `已清理 ${result.files} 个临时文件，共 ${size}。`
+    } catch (error) {
+        $('#cleanup-status').textContent =
+            `无法清理临时文件：${error?.message || String(error)}`
+    }
+}
+
 const showLibraryBookInfo = record => {
     renderBookInfo(record.metadata ?? {}, {
         name: record.name,
@@ -1274,6 +1368,8 @@ const createBookCard = record => {
     const article = document.createElement('article')
     article.className = 'book-card'
     article.dataset.id = record.id
+    const coverShell = document.createElement('div')
+    coverShell.className = 'book-card-cover-shell'
     const cover = document.createElement('button')
     cover.type = 'button'
     cover.className = 'book-card-cover'
@@ -1298,6 +1394,7 @@ const createBookCard = record => {
     progress.append(progressValue)
     cover.append(progress)
     cover.addEventListener('click', () => openLibraryRecord(record))
+    coverShell.append(cover)
 
     const text = document.createElement('div')
     text.className = 'book-card-text'
@@ -1310,23 +1407,53 @@ const createBookCard = record => {
 
     const actions = document.createElement('div')
     actions.className = 'book-card-actions'
-    for (const [label, handler] of [
-        ['信息', () => showLibraryBookInfo(record)],
-        ['新窗口', () => invoke
+    for (const [label, iconName, handler] of [
+        ['信息', 'info', () => showLibraryBookInfo(record)],
+        ['新窗口', 'copy-plus', () => invoke
             ? invoke('new_window', { bookId: record.id }).catch(error =>
                 showToast(error?.message || String(error)))
             : globalThis.open(`?book=${encodeURIComponent(record.id)}`, '_blank', 'noopener')],
-        ['外部打开', () => openRecordExternally(record).catch(error =>
+        ['外部打开', 'external-link', () => openRecordExternally(record).catch(error =>
             showToast(error?.message || String(error)))],
-        ['删除', () => removeLibraryRecord(record)],
+        ['删除', 'trash-2', () => removeLibraryRecord(record)],
     ]) {
         const button = document.createElement('button')
         button.type = 'button'
-        button.textContent = label
+        button.title = label
+        button.setAttribute('aria-label', label)
+        const icon = document.createElement('i')
+        icon.dataset.lucide = iconName
+        button.append(icon)
         button.addEventListener('click', handler)
         actions.append(button)
     }
-    article.append(cover, text, actions)
+    const menuButton = document.createElement('button')
+    menuButton.type = 'button'
+    menuButton.className = 'book-card-menu-button'
+    menuButton.title = '更多操作'
+    menuButton.setAttribute('aria-label', '更多操作')
+    menuButton.setAttribute('aria-expanded', 'false')
+    const menuIcon = document.createElement('i')
+    menuIcon.dataset.lucide = 'more-horizontal'
+    menuButton.append(menuIcon)
+    menuButton.addEventListener('click', event => {
+        event.stopPropagation()
+        for (const shell of $$('.book-card-cover-shell.menu-open'))
+            if (shell !== coverShell) {
+                shell.classList.remove('menu-open')
+                shell.querySelector('.book-card-menu-button')
+                    ?.setAttribute('aria-expanded', 'false')
+            }
+        const open = coverShell.classList.toggle('menu-open')
+        menuButton.setAttribute('aria-expanded', String(open))
+    })
+    actions.addEventListener('click', () => {
+        coverShell.classList.remove('menu-open')
+        menuButton.setAttribute('aria-expanded', 'false')
+    })
+    coverShell.append(menuButton, actions)
+    article.append(coverShell, text)
+    createIcons({ icons, root: coverShell })
     return article
 }
 
@@ -1395,8 +1522,30 @@ const setSidebarPanel = name => {
         button.classList.toggle('selected', button.dataset.panel === name)
 }
 
-const chooseFile = () => $('#file-input').click()
-const chooseImport = () => $('#import-input').click()
+const chooseFile = async () => {
+    if (!invoke) {
+        $('#file-input').click()
+        return
+    }
+    try {
+        const [info] = await invoke('choose_books', { multiple: false })
+        if (info) await openFile(nativeBookFromInfo(info), info.path.toLowerCase())
+    } catch (error) {
+        showToast(error?.message || String(error))
+    }
+}
+const chooseImport = async () => {
+    if (!invoke) {
+        $('#import-input').click()
+        return
+    }
+    try {
+        const infos = await invoke('choose_books', { multiple: true })
+        await importBooks(infos.map(nativeBookFromInfo))
+    } catch (error) {
+        showToast(error?.message || String(error))
+    }
+}
 
 const showOpenError = (title, message, error) => {
     $('#error-title').textContent = title
@@ -1514,6 +1663,32 @@ const keyboardNavigation = event => {
     }
 }
 
+let wheelAccumulator = 0
+let wheelLockedUntil = 0
+let wheelResetTimer
+const readerWheelNavigation = event => {
+    if (!reader.view || event.ctrlKey || event.metaKey) return
+    const isPDF = getExtension(reader.currentFile?.name ?? '') === 'pdf'
+    if (!reader.view.isFixedLayout && reader.flow === 'scrolled') return
+    if (isPDF && !reader.pdfWheel) return
+    const delta = Math.abs(event.deltaY) >= Math.abs(event.deltaX)
+        ? event.deltaY
+        : event.deltaX
+    if (!Number.isFinite(delta) || Math.abs(delta) < 1) return
+    event.preventDefault()
+    const now = performance.now()
+    if (now < wheelLockedUntil) return
+    wheelAccumulator += delta
+    clearTimeout(wheelResetTimer)
+    wheelResetTimer = setTimeout(() => { wheelAccumulator = 0 }, 180)
+    if (Math.abs(wheelAccumulator) < 32) return
+    const direction = Math.sign(wheelAccumulator)
+    wheelAccumulator = 0
+    wheelLockedUntil = now + 280
+    if (direction > 0) reader.view.goRight()
+    else reader.view.goLeft()
+}
+
 const hidePopovers = () => {
     $('#selection-popover').hidden = true
     $('#annotation-popover').hidden = true
@@ -1526,10 +1701,18 @@ const placePopover = (popover, { x, y }) => {
 }
 
 const showSelectionPopover = context => {
+    if (!selectionToolbarEnabled) return
     selectionContext = context
     const popover = $('#selection-popover')
-    const highlight = popover.querySelector('[data-selection-action="highlight"]')
-    highlight.hidden = reader.view.isFixedLayout
+    for (const button of popover.querySelectorAll('[data-selection-action]')) {
+        const action = button.dataset.selectionAction
+        button.hidden = !selectionToolEnabled[action]
+            || reader.view.isFixedLayout && ['highlight', 'copy-cfi'].includes(action)
+    }
+    if (!popover.querySelector('[data-selection-action]:not([hidden])')) {
+        selectionContext = null
+        return
+    }
     placePopover(popover, context.position)
     popover.hidden = false
     $('#annotation-popover').hidden = true
@@ -1970,6 +2153,55 @@ const syncPreferenceControls = () => {
     $('#reduce-animation-input').checked = reader.reduceAnimation
     $('#invert-dark-input').checked = reader.invertDark
     $('#autohide-cursor-input').checked = reader.autohideCursor
+    $('#pdf-zoom-select').value = reader.pdfZoom
+    $('#pdf-wheel-input').checked = reader.pdfWheel
+    $('#pdf-invert-dark-input').checked = reader.pdfInvertDark
+    $('#selection-toolbar-input').checked = selectionToolbarEnabled
+    for (const input of $$('[data-selection-tool]'))
+        input.checked = selectionToolEnabled[input.dataset.selectionTool]
+}
+
+let systemFontsPromise
+const loadSystemFonts = () => systemFontsPromise ??= (async () => {
+    const status = $('#font-list-status')
+    status.textContent = '正在读取 Windows 字体列表…'
+    try {
+        const fallback = [
+            'Arial', 'Calibri', 'Cambria', 'Consolas', 'Georgia',
+            'Microsoft YaHei UI', 'Segoe UI', 'SimSun', 'Times New Roman',
+        ]
+        const fonts = invoke ? await invoke('list_system_fonts') : fallback
+        const unique = Array.from(new Set(fonts.filter(Boolean)))
+        const fragment = document.createDocumentFragment()
+        for (const family of unique) {
+            const option = document.createElement('option')
+            option.value = family
+            fragment.append(option)
+        }
+        $('#system-fonts').replaceChildren(fragment)
+        status.textContent = `已读取 ${unique.length} 个字体系列；输入名称可快速筛选。`
+    } catch (error) {
+        console.warn(error)
+        status.textContent = '无法读取系统字体列表，仍可手动输入字体名称。'
+    }
+})()
+
+const selectPreferencesTab = tab => {
+    for (const button of $$('[data-preferences-tab]'))
+        button.classList.toggle('selected', button.dataset.preferencesTab === tab)
+    for (const panel of $$('[data-preferences-panel]'))
+        panel.hidden = panel.dataset.preferencesPanel !== tab
+}
+
+const openPreferences = tab => {
+    syncPreferenceControls()
+    selectPreferencesTab(tab ?? (
+        reader.view
+            ? getExtension(reader.currentFile?.name ?? '') === 'pdf' ? 'pdf' : 'reading'
+            : 'interface'
+    ))
+    $('#preferences-dialog').showModal()
+    loadSystemFonts()
 }
 
 const englishText = {
@@ -2027,12 +2259,22 @@ const englishText = {
     '完成': 'Done',
     '关闭': 'Close',
     '取消': 'Cancel',
-    '阅读设置': 'Reading Preferences',
+    '更多操作': 'More Actions',
+    '设置': 'Settings',
+    '界面设置': 'Interface',
+    '电子书阅读': 'E-book Reading',
+    'PDF 阅读': 'PDF Reading',
+    '划词工具': 'Selection Tools',
     '脚注': 'Footnote',
     '转到脚注': 'Go to Footnote',
     '查询': 'Lookup',
     '界面外观': 'Interface Appearance',
     '界面语言': 'Interface Language',
+    '存储清理': 'Storage Cleanup',
+    '清理已移除图书的阅读数据': 'Clear Retained Reading Data',
+    '清理临时文件': 'Clear Temporary Files',
+    '清理操作不会删除仍在书库中的阅读进度、批注或书签，也不会删除原始图书文件。':
+        'Cleanup does not delete data for books still in the library or original book files.',
     '跟随系统': 'Follow System',
     '浅色': 'Light',
     '深色': 'Dark',
@@ -2061,6 +2303,12 @@ const englishText = {
     '减少翻页动画': 'Reduce Animation',
     '暗色模式反色': 'Invert in Dark Mode',
     '阅读时自动隐藏光标': 'Autohide Cursor',
+    '页面缩放': 'Page Zoom',
+    '适合页面': 'Fit Page',
+    '适合宽度': 'Fit Width',
+    '鼠标滚轮翻页': 'Turn Pages with Mouse Wheel',
+    '显示划词工具条': 'Show Selection Toolbar',
+    '工具': 'Tools',
     '当前位置': 'Current Location',
     '本章节剩余': 'Section Remaining',
     '全书剩余': 'Book Remaining',
@@ -2077,7 +2325,7 @@ const englishText = {
     '图书信息': 'Book Information',
     '阅读器菜单': 'Reader Menu',
     '重新加载': 'Reload',
-    '在新窗口打开副本': 'Open Copy in New Window',
+    '在新窗口打开': 'Open in New Window',
     '全屏': 'Fullscreen',
     '打印整本书': 'Print Book',
     '导入批注': 'Import Annotations',
@@ -2151,7 +2399,7 @@ const shortcutRows = [
     ['F5 / Ctrl+R', '重新加载当前图书'],
     ['F11', '切换全屏'],
     ['Ctrl+P', '打印整本书'],
-    ['Ctrl+Shift+N', '在新窗口打开副本'],
+    ['Ctrl+Shift+N', '在新窗口打开'],
     ['Ctrl+?', '显示快捷键'],
     ['Esc', '关闭弹窗或侧栏'],
 ]
@@ -2170,9 +2418,9 @@ const showShortcuts = () => {
 }
 
 const showAbout = () => {
-    $('#about-version').textContent = runtimeInfo?.version ?? '0.1.0'
+    $('#about-version').textContent = runtimeInfo?.version ?? '0.1.2'
     $('#debug-info').textContent = [
-        `Version: ${runtimeInfo?.version ?? '0.1.0'}`,
+        `Version: ${runtimeInfo?.version ?? '0.1.2'}`,
         `Edition: ${runtimeInfo?.portable ? 'Portable' : invoke ? 'Installed' : 'Browser'}`,
         `Platform: ${navigator.platform}`,
         `User agent: ${navigator.userAgent}`,
@@ -2206,6 +2454,8 @@ const toggleFullscreen = async () => {
 const openCurrentInNewWindow = async () => {
     let bookId = reader.libraryRecord ? reader.bookId : null
     if (!bookId && reader.currentFile && reader.view?.book) {
+        if (invoke && !reader.currentFile.sourcePath)
+            throw new Error('当前图书没有可保存的 Windows 文件路径，请使用“打开电子书”按钮重新打开')
         const record = await library.import(reader.currentFile, async () => ({
             metadata: reader.metadata,
             title: $('#book-title').textContent,
@@ -2231,6 +2481,15 @@ const openCurrentInNewWindow = async () => {
     if (invoke) await invoke('new_window', { bookId })
     else globalThis.open(bookId ? `?book=${encodeURIComponent(bookId)}` : location.href,
         '_blank', 'noopener')
+}
+
+const openCurrentInNewWindowSafely = async () => {
+    try {
+        await openCurrentInNewWindow()
+    } catch (error) {
+        console.error(error)
+        showToast(error?.message || String(error) || '无法创建新窗口')
+    }
 }
 
 let windowStateTimer
@@ -2261,6 +2520,8 @@ const restoreWindowState = async () => {
 
 $('#theme-button').addEventListener('click', () =>
     setTheme(currentTheme() === 'dark' ? 'light' : 'dark'))
+$('#library-preferences-button').addEventListener('click', () =>
+    openPreferences('interface'))
 $('#open-button').addEventListener('click', chooseFile)
 $('#import-button').addEventListener('click', chooseImport)
 $('#empty-import-button').addEventListener('click', chooseImport)
@@ -2289,10 +2550,7 @@ $('#progress').addEventListener('input', event =>
     reader.view?.goToFraction(Number(event.target.value)))
 $('#progress-label').addEventListener('click', () =>
     $('#location-dialog').showModal())
-$('#preferences-button').addEventListener('click', () => {
-    syncPreferenceControls()
-    $('#preferences-dialog').showModal()
-})
+$('#preferences-button').addEventListener('click', () => openPreferences())
 $('#book-info-button').addEventListener('click', () =>
     $('#book-info-dialog').showModal())
 $('#reader-menu-button').addEventListener('click', () =>
@@ -2303,7 +2561,7 @@ $('#reload-book').addEventListener('click', () => {
 })
 $('#new-window-book').addEventListener('click', () => {
     $('#reader-menu-dialog').close()
-    openCurrentInNewWindow()
+    openCurrentInNewWindowSafely()
 })
 $('#fullscreen-button').addEventListener('click', () => {
     $('#reader-menu-dialog').close()
@@ -2389,14 +2647,23 @@ for (const button of $$('#selection-popover [data-selection-action]'))
             const title = $('#book-title').textContent
             const author = $('#book-author').textContent
             const page = reader.currentLocation?.pageItem?.label
-                || reader.currentLocation?.location?.current + 1
+                || (Number.isFinite(reader.currentLocation?.location?.current)
+                    ? reader.currentLocation.location.current + 1
+                    : null)
             await copyText(`“${context.text.trim()}” — ${[
                 title,
                 author,
                 page ? `第 ${page} 页/位置` : '',
             ].filter(Boolean).join('，')}`)
         } else if (action === 'copy-cfi') {
-            await copyText(reader.view.getCFI(context.index, context.range))
+            try {
+                const cfi = reader.view.getCFI(context.index, context.range)
+                if (!cfi) throw new Error('无法生成位置标识')
+                await copyText(cfi)
+            } catch (error) {
+                console.warn(error)
+                showToast('当前位置无法生成 EPUB 位置标识')
+            }
         } else if (action === 'find') {
             openBookSearch()
             $('#book-search-input').value = context.text.trim()
@@ -2462,11 +2729,17 @@ $('#footnote-dialog').addEventListener('close', () => {
 for (const button of $$('[data-dialog-close]'))
     button.addEventListener('click', () => button.closest('dialog').close())
 
+for (const button of $$('[data-preferences-tab]'))
+    button.addEventListener('click', () =>
+        selectPreferencesTab(button.dataset.preferencesTab))
+
 $('#theme-select').addEventListener('change', event => setTheme(event.target.value))
 $('#language-select').addEventListener('change', event => {
     localStorage.setItem('language', event.target.value)
     applyLanguage(event.target.value)
 })
+$('#cleanup-retained-data').addEventListener('click', cleanupRetainedReadingData)
+$('#cleanup-temporary-files').addEventListener('click', cleanupTemporaryFiles)
 $('#book-theme-select').addEventListener('change', event =>
     reader.setPreference('bookTheme', event.target.value, 'reader-book-theme'))
 const bindRangePreference = (input, output, property, storageKey, suffix = '', layout = false) =>
@@ -2507,6 +2780,26 @@ $('#invert-dark-input').addEventListener('change', event =>
 $('#autohide-cursor-input').addEventListener('change', event =>
     reader.setPreference('autohideCursor', event.target.checked,
         'reader-autohide-cursor', true))
+$('#pdf-zoom-select').addEventListener('change', event =>
+    reader.setPreference('pdfZoom', event.target.value, 'pdf-zoom', true))
+$('#pdf-wheel-input').addEventListener('change', event => {
+    reader.pdfWheel = event.target.checked
+    localStorage.setItem('pdf-wheel', String(reader.pdfWheel))
+})
+$('#pdf-invert-dark-input').addEventListener('change', event =>
+    reader.setPreference('pdfInvertDark', event.target.checked,
+        'pdf-invert-dark'))
+$('#selection-toolbar-input').addEventListener('change', event => {
+    selectionToolbarEnabled = event.target.checked
+    localStorage.setItem('selection-toolbar-enabled', String(selectionToolbarEnabled))
+    if (!selectionToolbarEnabled) hidePopovers()
+})
+for (const input of $$('[data-selection-tool]'))
+    input.addEventListener('change', event => {
+        const action = event.target.dataset.selectionTool
+        selectionToolEnabled[action] = event.target.checked
+        localStorage.setItem(`selection-tool-${action}`, String(event.target.checked))
+    })
 for (const [id, property, key] of [
     ['#serif-font-input', 'serifFont', 'reader-serif-font'],
     ['#sans-font-input', 'sansFont', 'reader-sans-font'],
@@ -2516,6 +2809,11 @@ for (const [id, property, key] of [
     if (!value) {
         event.target.value = reader[property]
         return
+    }
+    if (!reader.overrideFont) {
+        reader.overrideFont = true
+        localStorage.setItem('reader-override-font', 'true')
+        $('#override-font-input').checked = true
     }
     reader.setPreference(property, value, key)
 })
@@ -2653,7 +2951,14 @@ $('#image-viewer-stage').addEventListener('wheel', event => {
 }, { passive: false })
 
 document.addEventListener('keydown', keyboardNavigation)
+$('#reader-surface').addEventListener('wheel', readerWheelNavigation, { passive: false })
 document.addEventListener('pointerdown', event => {
+    if (!event.target.closest('.book-card-cover-shell'))
+        for (const shell of $$('.book-card-cover-shell.menu-open')) {
+            shell.classList.remove('menu-open')
+            shell.querySelector('.book-card-menu-button')
+                ?.setAttribute('aria-expanded', 'false')
+        }
     if (!event.target.closest('.popover')) hidePopovers()
 })
 document.addEventListener('pointerup', event => {
@@ -2665,7 +2970,10 @@ document.addEventListener('dragover', event => event.preventDefault())
 document.addEventListener('drop', event => {
     event.preventDefault()
     const files = Array.from(event.dataTransfer.files).filter(file => file.size > 0)
-    if (files.length > 1 || !$('#library-view').hidden) importBooks(files)
+    if (files.length > 1 || !$('#library-view').hidden) {
+        if (invoke) showToast('安装版请使用“导入图书”按钮，以保存原始文件路径')
+        else importBooks(files)
+    }
     else openFile(files[0])
 })
 window.addEventListener('resize', saveWindowState)
@@ -2690,7 +2998,8 @@ const initializeDesktop = async () => {
         await library.open()
         await renderLibrary()
         applyLanguage(localStorage.getItem('language') || 'zh-CN')
-        const requestedBook = new URLSearchParams(location.search).get('book')
+        const requestedBook = globalThis.__FOLIATE_STARTUP_BOOK__
+            || new URLSearchParams(location.search).get('book')
         if (invoke) {
             runtimeInfo = await invoke('runtime_info')
             document.documentElement.dataset.edition =
@@ -2713,7 +3022,8 @@ const initializeDesktop = async () => {
         && Number.isFinite(runtimeInfo.startupBookSize)) {
             const file = new NativeBookFile(
                 runtimeInfo.startupBook,
-                runtimeInfo.startupBookSize)
+                runtimeInfo.startupBookSize,
+                0)
             await openFile(file, runtimeInfo.startupBook.toLowerCase())
         }
     } catch (error) {

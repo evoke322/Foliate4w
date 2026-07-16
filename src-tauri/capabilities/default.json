@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Permissions for the main reader window",
-  "windows": ["main"],
+  "description": "Permissions for the main window and dynamically created reader windows",
+  "windows": ["main", "reader-*"],
   "permissions": ["core:default"]
 }

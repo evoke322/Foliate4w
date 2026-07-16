@@ -13,41 +13,61 @@ const textLayerBuilderCSS = await fetchText(pdfjsPath('text_layer_builder.css'))
 const annotationLayerBuilderCSS = await fetchText(pdfjsPath('annotation_layer_builder.css'))
 
 const render = async (page, doc, zoom) => {
-    const scale = zoom * devicePixelRatio
-    doc.documentElement.style.transform = `scale(${1 / devicePixelRatio})`
-    doc.documentElement.style.transformOrigin = 'top left'
-    doc.documentElement.style.setProperty('--scale-factor', scale)
+    const renderToken = (doc.__foliatePDFRenderToken ?? 0) + 1
+    doc.__foliatePDFRenderToken = renderToken
+    const scale = Number.isFinite(zoom) && zoom > 0 ? zoom : 1
+    const outputScale = Math.max(1, globalThis.devicePixelRatio || 1)
     const viewport = page.getViewport({ scale })
+    doc.documentElement.style.setProperty('--scale-factor', scale)
 
     // the canvas must be in the `PDFDocument`'s `ownerDocument`
     // (`globalThis.document` by default); that's where the fonts are loaded
     const renderCanvas = document.createElement('canvas')
-    renderCanvas.height = viewport.height
-    renderCanvas.width = viewport.width
+    renderCanvas.height = Math.ceil(viewport.height * outputScale)
+    renderCanvas.width = Math.ceil(viewport.width * outputScale)
     const canvasContext = renderCanvas.getContext('2d', { alpha: false })
-    await page.render({
+    doc.__foliatePDFRenderTask?.cancel?.()
+    const renderTask = page.render({
         canvas: renderCanvas,
         canvasContext,
         viewport,
+        transform: outputScale === 1
+            ? null
+            : [outputScale, 0, 0, outputScale, 0, 0],
         background: '#ffffff',
-    }).promise
+    })
+    doc.__foliatePDFRenderTask = renderTask
+    try {
+        await renderTask.promise
+    } catch (error) {
+        if (doc.__foliatePDFRenderToken !== renderToken
+        || error?.name === 'RenderingCancelledException') return
+        throw error
+    }
+    if (doc.__foliatePDFRenderTask === renderTask)
+        doc.__foliatePDFRenderTask = null
+    if (doc.__foliatePDFRenderToken !== renderToken) return
 
-    // Chromium/WebView2 can clear a canvas bitmap when the node is adopted by
-    // another document. Copy the rendered pixels to a canvas owned by the PDF
-    // page document instead of moving the original canvas across documents.
-    const pageCanvas = doc.createElement('canvas')
-    pageCanvas.height = renderCanvas.height
-    pageCanvas.width = renderCanvas.width
-    pageCanvas.style.display = 'block'
-    pageCanvas.getContext('2d', { alpha: false }).drawImage(renderCanvas, 0, 0)
-    doc.querySelector('#canvas').replaceChildren(pageCanvas)
+    // Match upstream foliate-js: render with PDF.js in its owner document,
+    // then move the completed canvas into the fixed-layout page document.
+    renderCanvas.style.width = `${viewport.width}px`
+    renderCanvas.style.height = `${viewport.height}px`
+    doc.querySelector('#canvas').replaceChildren(doc.adoptNode(renderCanvas))
 
+    const textContentSource = await page.streamTextContent()
+    if (doc.__foliatePDFRenderToken !== renderToken) return
     const container = doc.querySelector('.textLayer')
+    doc.__foliatePDFTextLayer?.cancel?.()
+    container.replaceChildren()
     const textLayer = new pdfjsLib.TextLayer({
-        textContentSource: await page.streamTextContent(),
+        textContentSource,
         container, viewport,
     })
+    doc.__foliatePDFTextLayer = textLayer
     await textLayer.render()
+    if (doc.__foliatePDFTextLayer === textLayer)
+        doc.__foliatePDFTextLayer = null
+    if (doc.__foliatePDFRenderToken !== renderToken) return
 
     // hide "offscreen" canvases appended to docuemnt when rendering text layer
     // https://github.com/mozilla/pdf.js/blob/642b9a5ae67ef642b9a8808fd9efd447e8c350e2/web/pdf_viewer.css#L51-L58
@@ -63,21 +83,24 @@ const render = async (page, doc, zoom) => {
 
     // fix text selection
     // https://github.com/mozilla/pdf.js/blob/642b9a5ae67ef642b9a8808fd9efd447e8c350e2/web/text_layer_builder.js#L105-L107
-    const endOfContent = document.createElement('div')
+    const endOfContent = doc.createElement('div')
     endOfContent.className = 'endOfContent'
     container.append(endOfContent)
     // TODO: this only works in Firefox; see https://github.com/mozilla/pdf.js/pull/17923
     container.onpointerdown = () => container.classList.add('selecting')
     container.onpointerup = () => container.classList.remove('selecting')
 
+    const annotations = await page.getAnnotations()
+    if (doc.__foliatePDFRenderToken !== renderToken) return
     const div = doc.querySelector('.annotationLayer')
+    div.replaceChildren()
     const linkService = {
         goToDestination: () => {},
         getDestinationHash: dest => JSON.stringify(dest),
         addLinkAttributes: (link, url) => link.href = url,
     }
     await new pdfjsLib.AnnotationLayer({ page, viewport, div, linkService })
-        .render({ annotations: await page.getAnnotations() })
+        .render({ annotations })
 }
 
 const renderPage = async (page, getImageBlob) => {
@@ -99,7 +122,17 @@ const renderPage = async (page, getImageBlob) => {
         html, body {
             margin: 0;
             padding: 0;
+            overflow: hidden;
+            background: #fff;
         }
+        #canvas, .textLayer, .annotationLayer {
+            position: absolute;
+            inset: 0;
+        }
+        #canvas { z-index: 0; }
+        #canvas canvas { display: block; }
+        .textLayer { z-index: 2; }
+        .annotationLayer { z-index: 3; }
         /*
         https://github.com/mozilla/pdf.js/commit/bd05b255fabfc313b194bfe9a17ccded4d90fb5a
         */
@@ -117,6 +150,7 @@ const renderPage = async (page, getImageBlob) => {
         <div class="annotationLayer"></div>
     `], { type: 'text/html' }))
     const onZoom = ({ doc, scale }) => render(page, doc, scale)
+        .catch(error => console.error('PDF page render failed', error))
     return { src, onZoom }
 }
 
