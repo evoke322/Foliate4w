@@ -1,0 +1,22 @@
+{
+  "name": "foliate4w",
+  "private": true,
+  "version": "0.1.0",
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "scripts": {
+    "web:dev": "vite --host 127.0.0.1 --port 1420",
+    "web:build": "vite build",
+    "dev": "tauri dev",
+    "build": "tauri build --bundles nsis",
+    "build:portable": "tauri build --no-bundle",
+    "check": "npm run web:build && cargo check --manifest-path src-tauri/Cargo.toml"
+  },
+  "dependencies": {
+    "lucide": "^0.544.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.8.4",
+    "vite": "^7.1.5"
+  }
+}

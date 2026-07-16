@@ -1,0 +1,33 @@
+# Node.js dependencies and package-manager logs
+node_modules/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Vite frontend output and caches
+dist/
+.vite/
+
+# Tauri / Cargo build output
+src-tauri/target/
+src-tauri/gen/
+
+# Locally staged installer and portable packages
+release/
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Editor and operating-system files
+.idea/
+.vscode/
+.fleet/
+*.swp
+*.swo
+Thumbs.db
+Desktop.ini
+.DS_Store

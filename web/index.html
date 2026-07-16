@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light dark">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' blob: data:; script-src 'self'; style-src 'self' 'unsafe-inline' blob:; img-src 'self' blob: data:; connect-src 'self' ipc: http://ipc.localhost blob: data:; frame-src blob: data:; worker-src 'self' blob:; object-src 'none'; form-action 'none'; base-uri 'none'">
+    <title>Foliate</title>
+    <link rel="icon" href="/assets/foliate.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <div id="app">
+        <header class="app-bar" aria-label="应用工具栏">
+            <div class="brand">
+                <img src="/assets/foliate.svg" alt="" width="30" height="30">
+                <span>Foliate</span>
+            </div>
+            <div class="app-actions">
+                <button class="icon-button" id="theme-button" type="button" title="切换深色模式" aria-label="切换深色模式">
+                    <i data-lucide="moon"></i>
+                </button>
+                <button class="command-button" id="open-button" type="button">
+                    <i data-lucide="folder-open"></i>
+                    <span>打开电子书</span>
+                </button>
+            </div>
+        </header>
+
+        <main id="empty-view" class="empty-view">
+            <div class="empty-content">
+                <img class="empty-logo" src="/assets/foliate.svg" alt="Foliate" width="104" height="104">
+                <h1>Foliate</h1>
+                <button class="primary-button" id="empty-open-button" type="button">
+                    <i data-lucide="book-open"></i>
+                    <span>打开电子书</span>
+                </button>
+            </div>
+        </main>
+
+        <main id="reader-view" class="reader-view" hidden>
+            <div id="reader-dimmer" class="reader-dimmer" hidden></div>
+            <aside id="sidebar" class="sidebar" aria-label="目录" aria-hidden="true">
+                <div class="book-summary">
+                    <img id="book-cover" alt="" hidden>
+                    <div class="book-summary-text">
+                        <h2 id="book-title">未命名图书</h2>
+                        <p id="book-author"></p>
+                    </div>
+                    <button class="icon-button sidebar-close" id="sidebar-close" type="button" title="关闭目录" aria-label="关闭目录">
+                        <i data-lucide="x"></i>
+                    </button>
+                </div>
+                <div class="sidebar-heading">目录</div>
+                <nav id="toc" class="toc" aria-label="图书目录"></nav>
+            </aside>
+
+            <section class="reading-pane">
+                <header class="reader-toolbar">
+                    <button class="icon-button" id="sidebar-button" type="button" title="目录" aria-label="打开目录">
+                        <i data-lucide="panel-left"></i>
+                    </button>
+                    <div class="reader-title" id="toolbar-title">未命名图书</div>
+                    <div class="reader-actions">
+                        <div class="segmented-control" aria-label="阅读布局">
+                            <button id="paginated-button" class="icon-button selected" type="button" title="分页" aria-label="分页">
+                                <i data-lucide="columns-2"></i>
+                            </button>
+                            <button id="scrolled-button" class="icon-button" type="button" title="滚动" aria-label="滚动">
+                                <i data-lucide="rows-3"></i>
+                            </button>
+                        </div>
+                    </div>
+                </header>
+
+                <div id="reader-surface" class="reader-surface" tabindex="-1"></div>
+
+                <footer class="reader-footer">
+                    <button class="icon-button" id="previous-button" type="button" title="上一页" aria-label="上一页">
+                        <i data-lucide="chevron-left"></i>
+                    </button>
+                    <input id="progress" type="range" min="0" max="1" step="any" value="0" aria-label="阅读进度">
+                    <span id="progress-label" class="progress-label">0%</span>
+                    <button class="icon-button" id="next-button" type="button" title="下一页" aria-label="下一页">
+                        <i data-lucide="chevron-right"></i>
+                    </button>
+                </footer>
+            </section>
+        </main>
+
+        <div id="loading" class="loading" role="status" hidden>
+            <span class="spinner" aria-hidden="true"></span>
+            <span>正在打开...</span>
+        </div>
+        <div id="toast" class="toast" role="alert" hidden></div>
+        <input id="file-input" type="file" accept=".epub,.mobi,.azw,.azw3,.fb2,.fb2.zip,.fbz,.cbz,.pdf" hidden>
+    </div>
+    <script type="module" src="/main.js"></script>
+</body>
+</html>

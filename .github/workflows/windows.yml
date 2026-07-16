@@ -1,0 +1,154 @@
+name: Build Windows
+
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Check web frontend
+        run: npm run web:build
+
+      - name: Check Rust shell
+        run: cargo check --manifest-path src-tauri/Cargo.toml --target x86_64-pc-windows-msvc
+
+      - name: Build installer
+        run: npm run build
+
+      - name: Stage release packages
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $release = Join-Path $PWD 'release'
+          $portable = Join-Path $release 'Foliate-Portable'
+          New-Item -ItemType Directory -Force -Path $portable | Out-Null
+
+          $installer = Get-ChildItem 'src-tauri/target/release/bundle/nsis/*-setup.exe' |
+            Select-Object -First 1
+          if (-not $installer) {
+            throw 'NSIS installer was not generated.'
+          }
+          Copy-Item $installer.FullName (Join-Path $release 'Foliate-Windows-x64-Setup.exe')
+
+          $binary = 'src-tauri/target/release/foliate4w.exe'
+          if (-not (Test-Path $binary)) {
+            throw 'Release executable was not generated.'
+          }
+          Copy-Item $binary (Join-Path $portable 'Foliate.exe')
+          New-Item -ItemType File -Force -Path (Join-Path $portable 'portable.flag') | Out-Null
+
+          $licenses = Join-Path $portable 'Licenses'
+          New-Item -ItemType Directory -Force -Path $licenses | Out-Null
+          Copy-Item 'COPYING' (Join-Path $licenses 'Foliate-GPL-3.0.txt')
+          Copy-Item 'web/public/foliate-js/LICENSE' (Join-Path $licenses 'foliate-js-MIT.txt')
+          Copy-Item 'node_modules/lucide/LICENSE' (Join-Path $licenses 'Lucide.txt')
+          Copy-Item 'web/public/foliate-js/vendor/pdfjs/cmaps/LICENSE' `
+            (Join-Path $licenses 'PDF.js-CMaps.txt')
+          Copy-Item 'web/public/foliate-js/vendor/pdfjs/standard_fonts/LICENSE_FOXIT' `
+            (Join-Path $licenses 'PDF.js-Foxit-Fonts.txt')
+          Copy-Item 'web/public/foliate-js/vendor/pdfjs/standard_fonts/LICENSE_LIBERATION' `
+            (Join-Path $licenses 'PDF.js-Liberation-Fonts.txt')
+
+          $data = Join-Path $portable 'Data'
+          foreach ($directory in @(
+            'cache', 'config', 'covers', 'library', 'logs', 'temp', 'WebView2'
+          )) {
+            New-Item -ItemType Directory -Force -Path (Join-Path $data $directory) | Out-Null
+          }
+          @'
+          This directory contains every file controlled by Foliate Portable.
+          Keep portable.flag beside Foliate.exe to preserve portable mode.
+          '@ | Set-Content -Encoding UTF8 (Join-Path $data 'README.txt')
+
+          Compress-Archive `
+            -Path $portable `
+            -DestinationPath (Join-Path $release 'Foliate-Windows-x64-Portable.zip') `
+            -CompressionLevel Optimal
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: Foliate-Windows-x64-Setup
+          if-no-files-found: error
+          path: release/Foliate-Windows-x64-Setup.exe
+
+      - name: Upload portable edition
+        uses: actions/upload-artifact@v7
+        with:
+          name: Foliate-Windows-x64-Portable
+          if-no-files-found: error
+          path: release/Foliate-Windows-x64-Portable.zip
+
+  release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download installer
+        uses: actions/download-artifact@v8
+        with:
+          name: Foliate-Windows-x64-Setup
+          path: release
+
+      - name: Download portable edition
+        uses: actions/download-artifact@v8
+        with:
+          name: Foliate-Windows-x64-Portable
+          path: release
+
+      - name: Publish release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" \
+              release/Foliate-Windows-x64-Setup.exe \
+              release/Foliate-Windows-x64-Portable.zip \
+              --clobber
+          else
+            gh release create "$TAG" \
+              release/Foliate-Windows-x64-Setup.exe \
+              release/Foliate-Windows-x64-Portable.zip \
+              --generate-notes \
+              --title "Foliate for Windows $TAG"
+          fi
