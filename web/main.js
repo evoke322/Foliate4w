@@ -23,10 +23,13 @@ import {
     List,
     ListTree,
     Maximize2,
+    Menu,
     MoreHorizontal,
+    MonitorCog,
     Moon,
-    PanelLeftClose,
     PanelLeftOpen,
+    Pin,
+    PinOff,
     Plus,
     Printer,
     Redo2,
@@ -147,10 +150,13 @@ const icons = {
     List,
     ListTree,
     Maximize2,
+    Menu,
     MoreHorizontal,
+    MonitorCog,
     Moon,
-    PanelLeftClose,
     PanelLeftOpen,
+    Pin,
+    PinOff,
     Plus,
     Printer,
     Redo2,
@@ -698,13 +704,6 @@ class Reader {
     }
 
     setupNavigation() {
-        const marks = this.view.getSectionFractions?.() ?? []
-        $('#section-marks').replaceChildren(...marks.slice(1, -1).map(value => {
-            const option = document.createElement('option')
-            option.value = value
-            return option
-        }))
-
         const pageItems = flattenNavigation(this.view.book.pageList)
         const pageSelect = $('#page-list-select')
         pageSelect.replaceChildren(...pageItems.map(item => {
@@ -1166,6 +1165,10 @@ let lastOpenRequest = null
 let libraryRecords = []
 let libraryCoverURLs = []
 let libraryListView = localStorage.getItem('library-view') === 'list'
+let libraryOpenMode = localStorage.getItem('library-open-mode') === 'manual'
+    ? 'manual'
+    : 'auto-import'
+let sidebarPinned = storedBoolean('sidebar-pinned', true)
 let selectionContext = null
 let currentAnnotation = null
 let currentAnnotationColor = '#f6d32d'
@@ -1253,6 +1256,37 @@ const importBooks = async files => {
         status.textContent = '正在打开…'
         $('#loading').hidden = true
         $('#import-input').value = ''
+    }
+}
+
+const applyLibraryOpenMode = mode => {
+    libraryOpenMode = mode === 'manual' ? 'manual' : 'auto-import'
+    localStorage.setItem('library-open-mode', libraryOpenMode)
+    document.documentElement.dataset.libraryOpenMode = libraryOpenMode
+    $('#library-open-mode-select').value = libraryOpenMode
+    const manual = libraryOpenMode === 'manual'
+    $('#import-button').hidden = !manual
+    $('#empty-import-button').hidden = !manual
+}
+
+const openPickedFile = async (file, storageIdentity = null) => {
+    if (!file) return
+    if (libraryOpenMode === 'manual') return openFile(file, storageIdentity)
+    $('#loading').hidden = false
+    const status = $('#loading span:last-child')
+    status.textContent = `正在导入：${file.name}`
+    try {
+        const record = await library.import(file, inspectBook)
+        await renderLibrary()
+        await openLibraryRecord(record)
+        showToast('已自动导入书库')
+    } catch (error) {
+        console.error(error)
+        showOpenError('无法打开图书', `无法解析或导入 “${file.name}”。`, error)
+    } finally {
+        status.textContent = '正在打开…'
+        $('#loading').hidden = true
+        $('#file-input').value = ''
     }
 }
 
@@ -1360,6 +1394,7 @@ const showLibraryBookInfo = record => {
         name: record.name,
         size: record.size,
         lastModified: record.lastModified,
+        sourcePath: record.sourcePath,
     })
     $('#book-info-dialog').showModal()
 }
@@ -1410,7 +1445,7 @@ const createBookCard = record => {
     for (const [label, iconName, handler] of [
         ['信息', 'info', () => showLibraryBookInfo(record)],
         ['新窗口', 'copy-plus', () => invoke
-            ? invoke('new_window', { bookId: record.id }).catch(error =>
+            ? invoke('new_window', { bookId: record.id, bookPath: null }).catch(error =>
                 showToast(error?.message || String(error)))
             : globalThis.open(`?book=${encodeURIComponent(record.id)}`, '_blank', 'noopener')],
         ['外部打开', 'external-link', () => openRecordExternally(record).catch(error =>
@@ -1423,7 +1458,9 @@ const createBookCard = record => {
         button.setAttribute('aria-label', label)
         const icon = document.createElement('i')
         icon.dataset.lucide = iconName
-        button.append(icon)
+        const text = document.createElement('span')
+        text.textContent = label
+        button.append(icon, text)
         button.addEventListener('click', handler)
         actions.append(button)
     }
@@ -1446,6 +1483,19 @@ const createBookCard = record => {
             }
         const open = coverShell.classList.toggle('menu-open')
         menuButton.setAttribute('aria-expanded', String(open))
+        if (open && !libraryListView) {
+            const anchor = menuButton.getBoundingClientRect()
+            const menu = actions.getBoundingClientRect()
+            const gap = 6
+            let left = anchor.right + gap
+            let top = anchor.bottom + gap
+            if (left + menu.width > innerWidth - 8)
+                left = anchor.left - menu.width - gap
+            if (top + menu.height > innerHeight - 8)
+                top = anchor.top - menu.height - gap
+            actions.style.left = `${Math.max(8, left)}px`
+            actions.style.top = `${Math.max(8, top)}px`
+        }
     })
     actions.addEventListener('click', () => {
         coverShell.classList.remove('menu-open')
@@ -1514,6 +1564,29 @@ const closeSidebar = () => {
     $('#reader-dimmer').hidden = true
 }
 
+const renderSidebarPin = () => {
+    const button = $('#sidebar-pin')
+    button.replaceChildren()
+    const icon = document.createElement('i')
+    icon.dataset.lucide = sidebarPinned ? 'pin' : 'pin-off'
+    button.append(icon)
+    button.classList.toggle('selected', sidebarPinned)
+    button.title = sidebarPinned ? '取消固定侧栏' : '固定侧栏'
+    button.setAttribute('aria-label', button.title)
+    button.setAttribute('aria-pressed', String(sidebarPinned))
+    originalAttributes.delete(button)
+    createIcons({ icons, root: button })
+    applyLanguage()
+}
+
+const toggleSidebarPin = () => {
+    sidebarPinned = !sidebarPinned
+    localStorage.setItem('sidebar-pinned', String(sidebarPinned))
+    renderSidebarPin()
+    if (sidebarPinned) openSidebar()
+    else closeSidebar()
+}
+
 const setSidebarPanel = name => {
     currentSidebarPanel = name
     for (const panel of ['search', 'toc', 'annotations', 'bookmarks'])
@@ -1529,7 +1602,7 @@ const chooseFile = async () => {
     }
     try {
         const [info] = await invoke('choose_books', { multiple: false })
-        if (info) await openFile(nativeBookFromInfo(info), info.path.toLowerCase())
+        if (info) await openPickedFile(nativeBookFromInfo(info), info.path.toLowerCase())
     } catch (error) {
         showToast(error?.message || String(error))
     }
@@ -1987,6 +2060,7 @@ const renderBookInfo = (metadata, file) => {
         ['版权', formatLanguageMap(metadata.rights)],
         ['格式', getExtension(file.name)?.toUpperCase()],
         ['文件大小', `${(file.size / 1024 / 1024).toFixed(1)} MB`],
+        ['文件位置', file.sourcePath],
         ['标识符', formatLanguageMap(metadata.identifier)],
     ].filter(([, value]) => value)
     const dl = document.createElement('dl')
@@ -1998,6 +2072,7 @@ const renderBookInfo = (metadata, file) => {
         dl.append(dt, dd)
     }
     $('#book-info-content').replaceChildren(...dl.childNodes)
+    applyLanguage()
 }
 
 const downloadBlob = (blob, name) => {
@@ -2133,6 +2208,7 @@ const setRangeControl = (id, outputId, value, suffix = '') => {
 
 const syncPreferenceControls = () => {
     $('#language-select').value = localStorage.getItem('language') || 'zh-CN'
+    $('#library-open-mode-select').value = libraryOpenMode
     $('#book-theme-select').value = reader.bookTheme
     setRangeControl('#font-size-input', '#font-size-output', reader.fontSize, ' px')
     setRangeControl('#minimum-font-size-input', '#minimum-font-size-output',
@@ -2193,6 +2269,39 @@ const selectPreferencesTab = tab => {
         panel.hidden = panel.dataset.preferencesPanel !== tab
 }
 
+const refreshSystemIntegrationStatus = async () => {
+    const status = $('#system-integration-status')
+    if (!invoke) {
+        status.textContent = '系统集成功能仅在 Windows 桌面版中可用。'
+        return
+    }
+    status.textContent = '正在读取当前状态…'
+    try {
+        const current = await invoke('system_integration_status')
+        status.textContent = [
+            `文件关联：${current.associations ? '已启用' : '未启用'}`,
+            `桌面快捷方式：${current.desktopShortcut ? '已创建' : '未创建'}`,
+        ].join('；')
+    } catch (error) {
+        status.textContent = `无法读取系统集成状态：${error?.message || String(error)}`
+    }
+}
+
+const runSystemIntegrationAction = async (command, args, successMessage) => {
+    const buttons = $$('.system-integration-actions button')
+    for (const button of buttons) button.disabled = true
+    try {
+        if (!invoke) throw new Error('系统集成功能仅在 Windows 桌面版中可用')
+        await invoke(command, args)
+        showToast(successMessage)
+    } catch (error) {
+        showToast(error?.message || String(error))
+    } finally {
+        for (const button of buttons) button.disabled = false
+        await refreshSystemIntegrationStatus()
+    }
+}
+
 const openPreferences = tab => {
     syncPreferenceControls()
     selectPreferencesTab(tab ?? (
@@ -2202,6 +2311,7 @@ const openPreferences = tab => {
     ))
     $('#preferences-dialog').showModal()
     loadSystemFonts()
+    if (tab === 'system') refreshSystemIntegrationStatus()
 }
 
 const englishText = {
@@ -2224,6 +2334,8 @@ const englishText = {
     '添加书签': 'Add Bookmark',
     '隐藏侧栏': 'Hide Sidebar',
     '显示侧栏': 'Show Sidebar',
+    '固定侧栏': 'Pin Sidebar',
+    '取消固定侧栏': 'Unpin Sidebar',
     '在书中搜索': 'Search in Book',
     '关闭搜索': 'Close Search',
     '上一个结果': 'Previous Result',
@@ -2265,11 +2377,18 @@ const englishText = {
     '电子书阅读': 'E-book Reading',
     'PDF 阅读': 'PDF Reading',
     '划词工具': 'Selection Tools',
+    '系统集成': 'System Integration',
     '脚注': 'Footnote',
     '转到脚注': 'Go to Footnote',
     '查询': 'Lookup',
     '界面外观': 'Interface Appearance',
     '界面语言': 'Interface Language',
+    '书库行为': 'Library Behavior',
+    '打开图书时': 'When Opening a Book',
+    '打开并自动导入书库': 'Open and Import Automatically',
+    '仅打开，按需手动导入': 'Open Only; Import Manually',
+    '自动导入模式保留一个书库入口；手动模式会同时显示“打开”和“导入”两个入口。':
+        'Auto-import keeps one open entry; manual mode shows separate Open and Import actions.',
     '存储清理': 'Storage Cleanup',
     '清理已移除图书的阅读数据': 'Clear Retained Reading Data',
     '清理临时文件': 'Clear Temporary Files',
@@ -2323,7 +2442,9 @@ const englishText = {
     '下一章': 'Next',
     '最后一章': 'Last',
     '图书信息': 'Book Information',
+    '文件位置': 'File Location',
     '阅读器菜单': 'Reader Menu',
+    '阅读设置': 'Reading Settings',
     '重新加载': 'Reload',
     '在新窗口打开': 'Open in New Window',
     '全屏': 'Fullscreen',
@@ -2342,6 +2463,12 @@ const englishText = {
     '信息': 'Info',
     '新窗口': 'New Window',
     '外部打开': 'Open Externally',
+    '文件关联': 'File Associations',
+    '关联支持的文件类型': 'Associate Supported File Types',
+    '取消文件关联': 'Remove File Associations',
+    '桌面快捷方式': 'Desktop Shortcut',
+    '发送桌面快捷方式': 'Create Desktop Shortcut',
+    '移除桌面快捷方式': 'Remove Desktop Shortcut',
     '翻译为': 'Translate to',
     '正在打开…': 'Opening…',
     '选择正文后即可添加批注。': 'Select text in the book to add an annotation.',
@@ -2418,10 +2545,10 @@ const showShortcuts = () => {
 }
 
 const showAbout = () => {
-    $('#about-version').textContent = runtimeInfo?.version ?? '0.1.2'
+    $('#about-version').textContent = runtimeInfo?.version ?? '0.1.3'
     $('#debug-info').textContent = [
-        `Version: ${runtimeInfo?.version ?? '0.1.2'}`,
-        `Edition: ${runtimeInfo?.portable ? 'Portable' : invoke ? 'Installed' : 'Browser'}`,
+        `Version: ${runtimeInfo?.version ?? '0.1.3'}`,
+        `Edition: ${runtimeInfo?.portable ? 'Portable' : invoke ? 'Desktop development' : 'Browser'}`,
         `Platform: ${navigator.platform}`,
         `User agent: ${navigator.userAgent}`,
         `Language: ${navigator.language}`,
@@ -2453,9 +2580,12 @@ const toggleFullscreen = async () => {
 
 const openCurrentInNewWindow = async () => {
     let bookId = reader.libraryRecord ? reader.bookId : null
-    if (!bookId && reader.currentFile && reader.view?.book) {
-        if (invoke && !reader.currentFile.sourcePath)
-            throw new Error('当前图书没有可保存的 Windows 文件路径，请使用“打开电子书”按钮重新打开')
+    let bookPath = null
+    if (!bookId && invoke && reader.currentFile && reader.view?.book) {
+        bookPath = reader.currentFile.sourcePath
+        if (!bookPath)
+            throw new Error('当前图书没有 Windows 文件路径，请使用“打开电子书”按钮重新打开')
+    } else if (!bookId && reader.currentFile && reader.view?.book) {
         const record = await library.import(reader.currentFile, async () => ({
             metadata: reader.metadata,
             title: $('#book-title').textContent,
@@ -2478,7 +2608,7 @@ const openCurrentInNewWindow = async () => {
             libraryRecord: record,
         }
     }
-    if (invoke) await invoke('new_window', { bookId })
+    if (invoke) await invoke('new_window', { bookId, bookPath })
     else globalThis.open(bookId ? `?book=${encodeURIComponent(bookId)}` : location.href,
         '_blank', 'noopener')
 }
@@ -2524,6 +2654,7 @@ $('#library-preferences-button').addEventListener('click', () =>
     openPreferences('interface'))
 $('#open-button').addEventListener('click', chooseFile)
 $('#import-button').addEventListener('click', chooseImport)
+$('#empty-open-button').addEventListener('click', chooseFile)
 $('#empty-import-button').addEventListener('click', chooseImport)
 $('#library-search-input').addEventListener('input', () => renderLibrary(false))
 $('#library-view-button').addEventListener('click', () => {
@@ -2532,10 +2663,10 @@ $('#library-view-button').addEventListener('click', () => {
     renderLibrary(false)
 })
 $('#library-button').addEventListener('click', showLibrary)
-$('#file-input').addEventListener('change', event => openFile(event.target.files[0]))
+$('#file-input').addEventListener('change', event => openPickedFile(event.target.files[0]))
 $('#import-input').addEventListener('change', event => importBooks(event.target.files))
 $('#about-button').addEventListener('click', showAbout)
-$('#sidebar-close').addEventListener('click', closeSidebar)
+$('#sidebar-pin').addEventListener('click', toggleSidebarPin)
 $('#sidebar-open').addEventListener('click', openSidebar)
 $('#reader-dimmer').addEventListener('click', closeSidebar)
 $('#previous-button').addEventListener('click', () => reader.view?.goLeft())
@@ -2550,11 +2681,14 @@ $('#progress').addEventListener('input', event =>
     reader.view?.goToFraction(Number(event.target.value)))
 $('#progress-label').addEventListener('click', () =>
     $('#location-dialog').showModal())
-$('#preferences-button').addEventListener('click', () => openPreferences())
 $('#book-info-button').addEventListener('click', () =>
     $('#book-info-dialog').showModal())
 $('#reader-menu-button').addEventListener('click', () =>
     $('#reader-menu-dialog').showModal())
+$('#reader-preferences').addEventListener('click', () => {
+    $('#reader-menu-dialog').close()
+    openPreferences()
+})
 $('#reload-book').addEventListener('click', () => {
     $('#reader-menu-dialog').close()
     reloadCurrentBook()
@@ -2730,16 +2864,29 @@ for (const button of $$('[data-dialog-close]'))
     button.addEventListener('click', () => button.closest('dialog').close())
 
 for (const button of $$('[data-preferences-tab]'))
-    button.addEventListener('click', () =>
-        selectPreferencesTab(button.dataset.preferencesTab))
+    button.addEventListener('click', () => {
+        const tab = button.dataset.preferencesTab
+        selectPreferencesTab(tab)
+        if (tab === 'system') refreshSystemIntegrationStatus()
+    })
 
 $('#theme-select').addEventListener('change', event => setTheme(event.target.value))
+$('#library-open-mode-select').addEventListener('change', event =>
+    applyLibraryOpenMode(event.target.value))
 $('#language-select').addEventListener('change', event => {
     localStorage.setItem('language', event.target.value)
     applyLanguage(event.target.value)
 })
 $('#cleanup-retained-data').addEventListener('click', cleanupRetainedReadingData)
 $('#cleanup-temporary-files').addEventListener('click', cleanupTemporaryFiles)
+$('#associate-files').addEventListener('click', () => runSystemIntegrationAction(
+    'set_file_associations', { enabled: true }, '已关联支持的文件类型'))
+$('#unassociate-files').addEventListener('click', () => runSystemIntegrationAction(
+    'set_file_associations', { enabled: false }, '已取消文件关联'))
+$('#create-desktop-shortcut').addEventListener('click', () => runSystemIntegrationAction(
+    'create_desktop_shortcut', {}, '已创建桌面快捷方式'))
+$('#remove-desktop-shortcut').addEventListener('click', () => runSystemIntegrationAction(
+    'remove_desktop_shortcut', {}, '已移除桌面快捷方式'))
 $('#book-theme-select').addEventListener('change', event =>
     reader.setPreference('bookTheme', event.target.value, 'reader-book-theme'))
 const bindRangePreference = (input, output, property, storageKey, suffix = '', layout = false) =>
@@ -2952,6 +3099,10 @@ $('#image-viewer-stage').addEventListener('wheel', event => {
 
 document.addEventListener('keydown', keyboardNavigation)
 $('#reader-surface').addEventListener('wheel', readerWheelNavigation, { passive: false })
+$('#reader-surface').addEventListener('pointerdown', () => {
+    if (!sidebarPinned && !$('#reader-view').classList.contains('sidebar-collapsed'))
+        closeSidebar()
+})
 document.addEventListener('pointerdown', event => {
     if (!event.target.closest('.book-card-cover-shell'))
         for (const shell of $$('.book-card-cover-shell.menu-open')) {
@@ -2970,11 +3121,16 @@ document.addEventListener('dragover', event => event.preventDefault())
 document.addEventListener('drop', event => {
     event.preventDefault()
     const files = Array.from(event.dataTransfer.files).filter(file => file.size > 0)
-    if (files.length > 1 || !$('#library-view').hidden) {
-        if (invoke) showToast('安装版请使用“导入图书”按钮，以保存原始文件路径')
-        else importBooks(files)
+    if (invoke) {
+        if (libraryOpenMode === 'manual' && files.length === 1 && $('#library-view').hidden)
+            openFile(files[0])
+        else
+            showToast('桌面版请使用“打开电子书”或“导入图书”按钮，以保存原始文件路径')
+    } else if (files.length > 1 || !$('#library-view').hidden) {
+        importBooks(files)
+    } else {
+        openPickedFile(files[0])
     }
-    else openFile(files[0])
 })
 window.addEventListener('resize', saveWindowState)
 window.addEventListener('beforeunload', saveWindowState)
@@ -2995,15 +3151,18 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
 
 const initializeDesktop = async () => {
     try {
+        applyLibraryOpenMode(libraryOpenMode)
+        renderSidebarPin()
         await library.open()
         await renderLibrary()
         applyLanguage(localStorage.getItem('language') || 'zh-CN')
         const requestedBook = globalThis.__FOLIATE_STARTUP_BOOK__
             || new URLSearchParams(location.search).get('book')
+        const requestedPath = globalThis.__FOLIATE_STARTUP_PATH__
         if (invoke) {
             runtimeInfo = await invoke('runtime_info')
             document.documentElement.dataset.edition =
-                runtimeInfo.portable ? 'portable' : 'installed'
+                runtimeInfo.portable ? 'portable' : 'desktop'
             await restoreWindowState()
         }
         if (runtimeInfo?.portable) {
@@ -3015,6 +3174,13 @@ const initializeDesktop = async () => {
             if (record) await openLibraryRecord(record)
             else showOpenError('图书不存在', '书库中找不到请求的图书。',
                 new Error(`Missing library record: ${requestedBook}`))
+        } else if (requestedPath?.pathHex && Number.isFinite(requestedPath.size)) {
+            const bytes = requestedPath.pathHex.match(/.{2}/g) ?? []
+            const path = new TextDecoder().decode(Uint8Array.from(
+                bytes, value => Number.parseInt(value, 16)))
+            const file = new NativeBookFile(
+                path, Number(requestedPath.size), Number(requestedPath.lastModified) || 0)
+            await openFile(file, path.toLowerCase())
         } else if (runtimeInfo?.startupError) {
             showOpenError('无法打开启动文件', runtimeInfo.startupError,
                 new Error(runtimeInfo.startupError))
@@ -3024,7 +3190,7 @@ const initializeDesktop = async () => {
                 runtimeInfo.startupBook,
                 runtimeInfo.startupBookSize,
                 0)
-            await openFile(file, runtimeInfo.startupBook.toLowerCase())
+            await openPickedFile(file, runtimeInfo.startupBook.toLowerCase())
         }
     } catch (error) {
         console.error(error)

@@ -114,6 +114,11 @@ button:disabled {
     background: var(--surface-hover);
 }
 
+.icon-button.selected {
+    background: var(--surface-muted);
+    color: var(--accent);
+}
+
 .icon-button.compact {
     width: 30px;
     height: 30px;
@@ -267,6 +272,12 @@ button:disabled {
     color: var(--text-muted);
 }
 
+.empty-library-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
 .library-content {
     height: calc(100% - 58px);
     overflow: auto;
@@ -321,25 +332,27 @@ button:disabled {
 .book-card-menu-button {
     position: absolute;
     z-index: 3;
-    right: 8px;
-    bottom: 9px;
-    width: 34px;
-    height: 34px;
+    right: 7px;
+    bottom: 8px;
+    width: 28px;
+    height: 28px;
     display: grid;
     place-items: center;
     padding: 0;
-    border: 1px solid rgb(255 255 255 / 28%);
+    border: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
     border-radius: 50%;
-    background: rgb(20 20 20 / 72%);
-    color: #fff;
-    box-shadow: 0 2px 8px rgb(0 0 0 / 35%);
+    background: color-mix(in srgb, var(--surface) 72%, transparent);
+    color: var(--text-muted);
+    box-shadow: 0 1px 5px rgb(0 0 0 / 18%);
+    opacity: .72;
     cursor: pointer;
 }
 
 .book-card-menu-button:hover,
 .book-card-cover-shell.menu-open .book-card-menu-button {
-    background: var(--accent);
-    color: var(--accent-contrast);
+    background: var(--surface-raised);
+    color: var(--text);
+    opacity: 1;
 }
 
 .book-card-cover img {
@@ -391,13 +404,14 @@ button:disabled {
 }
 
 .book-card-actions {
-    position: absolute;
-    z-index: 4;
-    right: 8px;
-    bottom: 50px;
+    position: fixed;
+    z-index: 30;
+    top: 0;
+    left: 0;
+    width: 164px;
     display: none;
-    grid-template-columns: repeat(2, 36px);
-    gap: 3px;
+    flex-direction: column;
+    gap: 2px;
     padding: 5px;
     border: 1px solid var(--border);
     border-radius: 10px;
@@ -406,24 +420,27 @@ button:disabled {
 }
 
 .book-card-cover-shell.menu-open .book-card-actions {
-    display: grid;
+    display: flex;
 }
 
 .book-card-actions button {
-    width: 32px;
-    height: 32px;
-    display: inline-grid;
-    place-items: center;
-    padding: 0;
+    width: 100%;
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 10px;
     border-radius: 7px;
     background: transparent;
     color: var(--text-muted);
+    text-align: left;
     cursor: pointer;
 }
 
 .book-card-actions button svg {
-    width: 17px;
-    height: 17px;
+    width: 18px;
+    height: 18px;
+    flex: 0 0 auto;
 }
 
 .book-card-actions button:hover {
@@ -472,6 +489,16 @@ button:disabled {
     box-shadow: none;
 }
 
+.library-grid.list-view .book-card-actions button {
+    width: 32px;
+    padding: 0;
+    justify-content: center;
+}
+
+.library-grid.list-view .book-card-actions span {
+    display: none;
+}
+
 .cleanup-settings {
     display: grid;
     gap: 8px;
@@ -499,7 +526,7 @@ button:disabled {
     z-index: 10;
     min-width: 0;
     display: grid;
-    grid-template-rows: 68px auto auto minmax(0, 1fr) 76px;
+    grid-template-rows: 62px auto auto minmax(0, 1fr) 58px;
     overflow: hidden;
     border-right: 1px solid var(--border);
     background: var(--sidebar);
@@ -737,7 +764,7 @@ button:disabled {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 3px;
-    padding: 7px 8px 8px;
+    padding: 5px 8px 6px;
     border-top: 1px solid var(--border);
     background: var(--sidebar);
 }
@@ -890,7 +917,7 @@ button:disabled {
     min-width: 0;
     min-height: 0;
     display: grid;
-    grid-template-rows: minmax(0, 1fr) 62px;
+    grid-template-rows: minmax(0, 1fr) 58px;
     background: var(--reader-bg);
 }
 
@@ -944,7 +971,7 @@ button:disabled {
     grid-template-columns: 44px 44px minmax(100px, 1fr) 64px 44px 44px 44px;
     align-items: center;
     gap: 5px;
-    padding: 7px 10px;
+    padding: 4px 10px;
     border-top: 1px solid var(--border);
     background: var(--surface);
 }
@@ -1111,6 +1138,10 @@ dialog::backdrop {
     max-height: min(720px, calc(100vh - 32px));
 }
 
+#preferences-dialog {
+    width: min(840px, calc(100vw - 32px));
+}
+
 .dialog-card {
     max-height: min(720px, calc(100vh - 32px));
     display: grid;
@@ -1252,7 +1283,7 @@ dialog::backdrop {
 }
 
 .preferences-card {
-    width: min(820px, calc(100vw - 32px));
+    width: 100%;
 }
 
 .preferences-card > main {
@@ -1362,6 +1393,27 @@ dialog::backdrop {
     color: var(--text-muted);
     font-size: 12px;
     line-height: 1.5;
+}
+
+.system-integration-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.system-integration-actions button,
+.cleanup-settings button {
+    min-height: 38px;
+    padding: 0 13px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    cursor: pointer;
+}
+
+.system-integration-actions button:hover,
+.cleanup-settings button:hover {
+    background: var(--surface-hover);
 }
 
 .selection-tool-settings {

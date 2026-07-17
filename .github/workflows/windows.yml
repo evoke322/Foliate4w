@@ -1,11 +1,8 @@
 name: Build Windows
 
 on:
-  push:
-    branches: [main, master]
-    tags: ['v*']
-  pull_request:
-  workflow_dispatch:
+  release:
+    types: [published]
 
 permissions:
   contents: read
@@ -46,8 +43,8 @@ jobs:
       - name: Check Rust shell
         run: cargo check --manifest-path src-tauri/Cargo.toml --target x86_64-pc-windows-msvc
 
-      - name: Build installer
-        run: npm run build
+      - name: Build portable executable
+        run: npm run build:portable
 
       - name: Stage release packages
         shell: pwsh
@@ -56,13 +53,6 @@ jobs:
           $release = Join-Path $PWD 'release'
           $portable = Join-Path $release 'Foliate-Portable'
           New-Item -ItemType Directory -Force -Path $portable | Out-Null
-
-          $installer = Get-ChildItem 'src-tauri/target/release/bundle/nsis/*-setup.exe' |
-            Select-Object -First 1
-          if (-not $installer) {
-            throw 'NSIS installer was not generated.'
-          }
-          Copy-Item $installer.FullName (Join-Path $release 'Foliate-Windows-x64-Setup.exe')
 
           $binary = 'src-tauri/target/release/foliate4w.exe'
           if (-not (Test-Path $binary)) {
@@ -82,6 +72,20 @@ jobs:
             (Join-Path $licenses 'PDF.js-Foxit-Fonts.txt')
           Copy-Item 'web/public/foliate-js/vendor/pdfjs/standard_fonts/LICENSE_LIBERATION' `
             (Join-Path $licenses 'PDF.js-Liberation-Fonts.txt')
+          Copy-Item 'web/public/foliate-js/vendor/pdfjs/wasm/LICENSE_OPENJPEG' `
+            (Join-Path $licenses 'PDF.js-OpenJPEG.txt')
+          Copy-Item 'web/public/foliate-js/vendor/pdfjs/wasm/LICENSE_JBIG2' `
+            (Join-Path $licenses 'PDF.js-JBIG2.txt')
+          Copy-Item 'web/public/foliate-js/vendor/pdfjs/wasm/LICENSE_QCMS' `
+            (Join-Path $licenses 'PDF.js-QCMS.txt')
+          Copy-Item 'web/public/foliate-js/vendor/pdfjs/wasm/LICENSE_PDFJS_JBIG2' `
+            (Join-Path $licenses 'PDF.js-JBIG2-Wrapper.txt')
+          Copy-Item 'web/public/foliate-js/vendor/pdfjs/wasm/LICENSE_PDFJS_OPENJPEG' `
+            (Join-Path $licenses 'PDF.js-OpenJPEG-Wrapper.txt')
+          Copy-Item 'web/public/foliate-js/vendor/pdfjs/wasm/LICENSE_PDFJS_QCMS' `
+            (Join-Path $licenses 'PDF.js-QCMS-Wrapper.txt')
+          Copy-Item 'web/public/foliate-js/vendor/pdfjs/iccs/LICENSE' `
+            (Join-Path $licenses 'PDF.js-ICC-Profiles.txt')
 
           $data = Join-Path $portable 'Data'
           foreach ($directory in @(
@@ -99,13 +103,6 @@ jobs:
             -DestinationPath (Join-Path $release 'Foliate-Windows-x64-Portable.zip') `
             -CompressionLevel Optimal
 
-      - name: Upload installer
-        uses: actions/upload-artifact@v7
-        with:
-          name: Foliate-Windows-x64-Setup
-          if-no-files-found: error
-          path: release/Foliate-Windows-x64-Setup.exe
-
       - name: Upload portable edition
         uses: actions/upload-artifact@v7
         with:
@@ -115,19 +112,12 @@ jobs:
 
   release:
     name: Publish GitHub Release
-    if: startsWith(github.ref, 'refs/tags/v')
     needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
-      - name: Download installer
-        uses: actions/download-artifact@v8
-        with:
-          name: Foliate-Windows-x64-Setup
-          path: release
-
       - name: Download portable edition
         uses: actions/download-artifact@v8
         with:
@@ -138,17 +128,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ github.event.release.tag_name }}
         run: |
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" \
-              release/Foliate-Windows-x64-Setup.exe \
-              release/Foliate-Windows-x64-Portable.zip \
-              --clobber
-          else
-            gh release create "$TAG" \
-              release/Foliate-Windows-x64-Setup.exe \
-              release/Foliate-Windows-x64-Portable.zip \
-              --generate-notes \
-              --title "Foliate for Windows $TAG"
-          fi
+          gh release upload "$TAG" \
+            release/Foliate-Windows-x64-Portable.zip \
+            --clobber

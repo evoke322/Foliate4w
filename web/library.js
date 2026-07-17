@@ -180,7 +180,7 @@ export class LibraryStore extends EventTarget {
             lastOpened: existing?.lastOpened ?? '',
             modified: now,
         }
-        // Installed builds keep only the original Windows path. If this record
+        // Desktop builds keep only the original Windows path. If this record
         // came from an older version, importing the original file again also
         // removes the embedded Blob copy.
         if (!record.sourcePath && !globalThis.__TAURI__) record.blob = file

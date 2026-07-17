@@ -1,6 +1,10 @@
 use serde::Serialize;
 #[cfg(target_os = "windows")]
-use std::collections::BTreeSet;
+use std::{
+    collections::BTreeSet,
+    os::windows::process::CommandExt,
+    process::{Command, Output},
+};
 use std::{
     ffi::OsStr,
     fs::{self, File},
@@ -63,6 +67,13 @@ struct CleanupResult {
     bytes: u64,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SystemIntegrationStatus {
+    associations: bool,
+    desktop_shortcut: bool,
+}
+
 fn is_supported_book(path: &Path) -> bool {
     path.is_file()
         && path
@@ -104,6 +115,20 @@ fn book_path_info(path: impl AsRef<Path>) -> Result<BookPathInfo, String> {
         size: metadata.len(),
         last_modified,
     })
+}
+
+fn hex_encode(value: &str) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    value
+        .as_bytes()
+        .iter()
+        .flat_map(|&byte| {
+            [
+                HEX[(byte >> 4) as usize] as char,
+                HEX[(byte & 0x0f) as usize] as char,
+            ]
+        })
+        .collect()
 }
 
 fn startup_book() -> (Option<PathBuf>, Option<String>) {
@@ -212,6 +237,280 @@ fn runtime_info(state: State<'_, RuntimeState>) -> RuntimeInfo {
             .data_dir
             .as_ref()
             .map(|path| path.to_string_lossy().into_owned()),
+    }
+}
+
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+#[cfg(target_os = "windows")]
+const FOLIATE_PROGID: &str = "Foliate4w.Book";
+
+#[cfg(target_os = "windows")]
+fn hidden_command_output(program: &str, args: &[String]) -> Result<Output, String> {
+    Command::new(program)
+        .args(args)
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|error| format!("无法运行 {program}：{error}"))
+}
+
+#[cfg(target_os = "windows")]
+fn checked_command(program: &str, args: &[String]) -> Result<Output, String> {
+    let output = hidden_command_output(program, args)?;
+    if output.status.success() {
+        Ok(output)
+    } else {
+        let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        Err(if detail.is_empty() {
+            format!("{program} 执行失败：{}", output.status)
+        } else {
+            detail
+        })
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn reg_add(key: &str, name: Option<&str>, value: &str) -> Result<(), String> {
+    let mut args = vec!["add".to_string(), key.to_string()];
+    if let Some(name) = name {
+        args.extend(["/v".to_string(), name.to_string()]);
+    } else {
+        args.push("/ve".to_string());
+    }
+    args.extend([
+        "/t".to_string(),
+        "REG_SZ".to_string(),
+        "/d".to_string(),
+        value.to_string(),
+        "/f".to_string(),
+    ]);
+    checked_command("reg.exe", &args).map(|_| ())
+}
+
+#[cfg(target_os = "windows")]
+fn reg_delete_key(key: &str) {
+    let _ = hidden_command_output(
+        "reg.exe",
+        &["delete".to_string(), key.to_string(), "/f".to_string()],
+    );
+}
+
+#[cfg(target_os = "windows")]
+fn reg_delete_value(key: &str, name: &str) {
+    let _ = hidden_command_output(
+        "reg.exe",
+        &[
+            "delete".to_string(),
+            key.to_string(),
+            "/v".to_string(),
+            name.to_string(),
+            "/f".to_string(),
+        ],
+    );
+}
+
+#[cfg(target_os = "windows")]
+fn notify_file_association_changed() {
+    use windows_sys::Win32::UI::Shell::{SHChangeNotify, SHCNE_ASSOCCHANGED, SHCNF_IDLIST};
+    unsafe {
+        SHChangeNotify(
+            SHCNE_ASSOCCHANGED as i32,
+            SHCNF_IDLIST,
+            std::ptr::null(),
+            std::ptr::null(),
+        );
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn current_executable() -> Result<PathBuf, String> {
+    std::env::current_exe()
+        .and_then(|path| path.canonicalize())
+        .map_err(|error| format!("无法确定 Foliate 程序位置：{error}"))
+}
+
+#[cfg(target_os = "windows")]
+#[tauri::command]
+fn set_file_associations(enabled: bool) -> Result<(), String> {
+    let executable = current_executable()?;
+    let executable_text = executable.to_string_lossy();
+    let executable_name = executable
+        .file_name()
+        .and_then(OsStr::to_str)
+        .ok_or_else(|| "无法确定 Foliate 程序文件名".to_string())?;
+    let classes = r"HKCU\Software\Classes";
+    let progid_key = format!(r"{classes}\{FOLIATE_PROGID}");
+    let application_key = format!(r"{classes}\Applications\{executable_name}");
+
+    if enabled {
+        let icon = format!(r#""{executable_text}",0"#);
+        let open_command = format!(r#""{executable_text}" "%1""#);
+        reg_add(&progid_key, None, "Foliate e-book")?;
+        reg_add(&format!(r"{progid_key}\DefaultIcon"), None, &icon)?;
+        reg_add(&format!(r"{progid_key}\shell"), None, "open")?;
+        reg_add(
+            &format!(r"{progid_key}\shell\open\command"),
+            None,
+            &open_command,
+        )?;
+        reg_add(&application_key, Some("FriendlyAppName"), "Foliate")?;
+        reg_add(&format!(r"{application_key}\DefaultIcon"), None, &icon)?;
+        reg_add(
+            &format!(r"{application_key}\shell\open\command"),
+            None,
+            &open_command,
+        )?;
+        for extension in SUPPORTED_EXTENSIONS {
+            let extension = format!(".{extension}");
+            reg_add(
+                &format!(r"{classes}\{extension}\OpenWithProgids"),
+                Some(FOLIATE_PROGID),
+                "",
+            )?;
+            reg_add(
+                &format!(r"{application_key}\SupportedTypes"),
+                Some(&extension),
+                "",
+            )?;
+        }
+    } else {
+        for extension in SUPPORTED_EXTENSIONS {
+            reg_delete_value(
+                &format!(r"{classes}\.{}\OpenWithProgids", extension),
+                FOLIATE_PROGID,
+            );
+        }
+        reg_delete_key(&application_key);
+        reg_delete_key(&progid_key);
+    }
+    notify_file_association_changed();
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn powershell_shortcut_output(script: &str) -> Result<Output, String> {
+    let executable = current_executable()?;
+    let mut command = Command::new("powershell.exe");
+    command
+        .args([
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            script,
+        ])
+        .env("FOLIATE4W_SHORTCUT_TARGET", executable)
+        .creation_flags(CREATE_NO_WINDOW);
+    let output = command
+        .output()
+        .map_err(|error| format!("无法启动 Windows PowerShell：{error}"))?;
+    if output.status.success() {
+        Ok(output)
+    } else {
+        let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        Err(if detail.is_empty() {
+            "无法管理桌面快捷方式".to_string()
+        } else {
+            detail
+        })
+    }
+}
+
+#[cfg(target_os = "windows")]
+#[tauri::command]
+fn create_desktop_shortcut() -> Result<String, String> {
+    let output = powershell_shortcut_output(
+        r#"$target=$env:FOLIATE4W_SHORTCUT_TARGET
+$desktop=[Environment]::GetFolderPath('Desktop')
+$link=Join-Path $desktop 'Foliate.lnk'
+$shell=New-Object -ComObject WScript.Shell
+if (Test-Path -LiteralPath $link) {
+  $existing=$shell.CreateShortcut($link)
+  if ([IO.Path]::GetFullPath($existing.TargetPath) -cne [IO.Path]::GetFullPath($target)) {
+    throw '桌面已存在指向其他程序的 Foliate.lnk，未覆盖该快捷方式。'
+  }
+}
+$shortcut=$shell.CreateShortcut($link)
+$shortcut.TargetPath=$target
+$shortcut.WorkingDirectory=[IO.Path]::GetDirectoryName($target)
+$shortcut.IconLocation="$target,0"
+$shortcut.Description='Foliate e-book reader'
+$shortcut.Save()
+[Console]::OutputEncoding=[Text.Encoding]::UTF8
+Write-Output $link"#,
+    )?;
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+#[cfg(target_os = "windows")]
+#[tauri::command]
+fn remove_desktop_shortcut() -> Result<(), String> {
+    powershell_shortcut_output(
+        r#"$target=$env:FOLIATE4W_SHORTCUT_TARGET
+$link=Join-Path ([Environment]::GetFolderPath('Desktop')) 'Foliate.lnk'
+if (Test-Path -LiteralPath $link) {
+  $shell=New-Object -ComObject WScript.Shell
+  $shortcut=$shell.CreateShortcut($link)
+  if ([IO.Path]::GetFullPath($shortcut.TargetPath) -cne [IO.Path]::GetFullPath($target)) {
+    throw 'Foliate.lnk 指向其他程序，未移除该快捷方式。'
+  }
+  Remove-Item -LiteralPath $link -Force
+}"#,
+    )?;
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+#[tauri::command]
+fn system_integration_status() -> SystemIntegrationStatus {
+    let association_output = powershell_shortcut_output(
+        r#"$target=$env:FOLIATE4W_SHORTCUT_TARGET
+$key='Registry::HKEY_CURRENT_USER\Software\Classes\Foliate4w.Book\shell\open\command'
+if (-not (Test-Path -LiteralPath $key)) { exit 1 }
+$command=(Get-Item -LiteralPath $key).GetValue('')
+$expected='"'+$target+'" "%1"'
+if ($command -ceq $expected) { exit 0 } else { exit 1 }"#,
+    );
+    let shortcut_output = powershell_shortcut_output(
+        r#"$link=Join-Path ([Environment]::GetFolderPath('Desktop')) 'Foliate.lnk'
+if (-not (Test-Path -LiteralPath $link)) { exit 1 }
+$shell=New-Object -ComObject WScript.Shell
+$shortcut=$shell.CreateShortcut($link)
+$target=[IO.Path]::GetFullPath($env:FOLIATE4W_SHORTCUT_TARGET)
+$actual=[IO.Path]::GetFullPath($shortcut.TargetPath)
+if ($actual -ceq $target) { exit 0 } else { exit 1 }"#,
+    );
+    SystemIntegrationStatus {
+        associations: association_output.is_ok(),
+        desktop_shortcut: shortcut_output.is_ok(),
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+#[tauri::command]
+fn set_file_associations(_enabled: bool) -> Result<(), String> {
+    Err("当前平台不支持 Windows 文件关联".to_string())
+}
+
+#[cfg(not(target_os = "windows"))]
+#[tauri::command]
+fn create_desktop_shortcut() -> Result<String, String> {
+    Err("当前平台不支持 Windows 桌面快捷方式".to_string())
+}
+
+#[cfg(not(target_os = "windows"))]
+#[tauri::command]
+fn remove_desktop_shortcut() -> Result<(), String> {
+    Err("当前平台不支持 Windows 桌面快捷方式".to_string())
+}
+
+#[cfg(not(target_os = "windows"))]
+#[tauri::command]
+fn system_integration_status() -> SystemIntegrationStatus {
+    SystemIntegrationStatus {
+        associations: false,
+        desktop_shortcut: false,
     }
 }
 
@@ -403,8 +702,9 @@ fn choose_books(_multiple: bool) -> Result<Vec<BookPathInfo>, String> {
 }
 
 #[tauri::command]
-fn new_window(
+async fn new_window(
     book_id: Option<String>,
+    book_path: Option<String>,
     app: AppHandle,
     state: State<'_, RuntimeState>,
 ) -> Result<(), String> {
@@ -423,6 +723,7 @@ fn new_window(
             }
         })
         .transpose()?;
+    let book_path = book_path.map(book_path_info).transpose()?;
     let id = WINDOW_ID.fetch_add(1, Ordering::Relaxed);
     let mut builder = WebviewWindowBuilder::new(
         &app,
@@ -439,6 +740,13 @@ fn new_window(
     if let Some(book_id) = book_id {
         builder = builder.initialization_script(format!(
             "globalThis.__FOLIATE_STARTUP_BOOK__ = \"{book_id}\";"
+        ));
+    } else if let Some(book) = book_path {
+        builder = builder.initialization_script(format!(
+            "globalThis.__FOLIATE_STARTUP_PATH__ = {{ pathHex: \"{}\", size: {}, lastModified: {} }};",
+            hex_encode(&book.path),
+            book.size,
+            book.last_modified,
         ));
     }
     if let Some(directory) = state.data_dir.as_ref().map(|path| path.join("WebView2")) {
@@ -603,6 +911,10 @@ pub fn run() {
         .manage(runtime)
         .invoke_handler(tauri::generate_handler![
             runtime_info,
+            system_integration_status,
+            set_file_associations,
+            create_desktop_shortcut,
+            remove_desktop_shortcut,
             list_system_fonts,
             get_window_state,
             restore_window_state,

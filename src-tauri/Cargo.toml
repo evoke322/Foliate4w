@@ -1,6 +1,6 @@
 [package]
 name = "foliate4w"
-version = "0.1.2"
+version = "0.1.3"
 description = "Foliate e-book reader for Windows"
 authors = ["Foliate contributors"]
 edition = "2021"

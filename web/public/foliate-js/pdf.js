@@ -48,59 +48,98 @@ const render = async (page, doc, zoom) => {
         doc.__foliatePDFRenderTask = null
     if (doc.__foliatePDFRenderToken !== renderToken) return
 
-    // Match upstream foliate-js: render with PDF.js in its owner document,
-    // then move the completed canvas into the fixed-layout page document.
-    renderCanvas.style.width = `${viewport.width}px`
-    renderCanvas.style.height = `${viewport.height}px`
-    doc.querySelector('#canvas').replaceChildren(doc.adoptNode(renderCanvas))
-
-    const textContentSource = await page.streamTextContent()
+    // WebView2 can lose the backing bitmap when a GPU-backed canvas is adopted
+    // into another document. Read the completed bitmap back into a Blob and
+    // display it in the fixed-layout page document instead.
+    const bitmap = await new Promise((resolve, reject) => renderCanvas.toBlob(blob =>
+        blob ? resolve(blob) : reject(new Error('PDF Canvas 无法生成页面图像')),
+    'image/png'))
     if (doc.__foliatePDFRenderToken !== renderToken) return
-    const container = doc.querySelector('.textLayer')
-    doc.__foliatePDFTextLayer?.cancel?.()
-    container.replaceChildren()
-    const textLayer = new pdfjsLib.TextLayer({
-        textContentSource,
-        container, viewport,
+    const bitmapURL = URL.createObjectURL(bitmap)
+    const image = doc.createElement('img')
+    image.alt = ''
+    const imageReady = new Promise((resolve, reject) => {
+        image.addEventListener('load', resolve, { once: true })
+        image.addEventListener('error', () =>
+            reject(new Error('PDF 页面图像无法载入')), { once: true })
     })
-    doc.__foliatePDFTextLayer = textLayer
-    await textLayer.render()
-    if (doc.__foliatePDFTextLayer === textLayer)
-        doc.__foliatePDFTextLayer = null
-    if (doc.__foliatePDFRenderToken !== renderToken) return
-
-    // hide "offscreen" canvases appended to docuemnt when rendering text layer
-    // https://github.com/mozilla/pdf.js/blob/642b9a5ae67ef642b9a8808fd9efd447e8c350e2/web/pdf_viewer.css#L51-L58
-    for (const canvas of document.querySelectorAll('.hiddenCanvasElement'))
-        Object.assign(canvas.style, {
-            position: 'absolute',
-            top: '0',
-            left: '0',
-            width: '0',
-            height: '0',
-            display: 'none',
-        })
-
-    // fix text selection
-    // https://github.com/mozilla/pdf.js/blob/642b9a5ae67ef642b9a8808fd9efd447e8c350e2/web/text_layer_builder.js#L105-L107
-    const endOfContent = doc.createElement('div')
-    endOfContent.className = 'endOfContent'
-    container.append(endOfContent)
-    // TODO: this only works in Firefox; see https://github.com/mozilla/pdf.js/pull/17923
-    container.onpointerdown = () => container.classList.add('selecting')
-    container.onpointerup = () => container.classList.remove('selecting')
-
-    const annotations = await page.getAnnotations()
-    if (doc.__foliatePDFRenderToken !== renderToken) return
-    const div = doc.querySelector('.annotationLayer')
-    div.replaceChildren()
-    const linkService = {
-        goToDestination: () => {},
-        getDestinationHash: dest => JSON.stringify(dest),
-        addLinkAttributes: (link, url) => link.href = url,
+    image.src = bitmapURL
+    image.style.width = `${viewport.width}px`
+    image.style.height = `${viewport.height}px`
+    const previousBitmapURL = doc.__foliatePDFBitmapURL
+    doc.__foliatePDFBitmapURL = bitmapURL
+    const bitmapContainer = doc.querySelector('#canvas')
+    bitmapContainer.className = ''
+    bitmapContainer.replaceChildren(image)
+    if (previousBitmapURL) URL.revokeObjectURL(previousBitmapURL)
+    try {
+        await imageReady
+    } catch (error) {
+        if (doc.__foliatePDFRenderToken === renderToken) throw error
+        return
+    } finally {
+        URL.revokeObjectURL(bitmapURL)
+        if (doc.__foliatePDFBitmapURL === bitmapURL)
+            doc.__foliatePDFBitmapURL = null
     }
-    await new pdfjsLib.AnnotationLayer({ page, viewport, div, linkService })
-        .render({ annotations })
+    if (doc.__foliatePDFRenderToken !== renderToken) return
+
+    try {
+        const textContentSource = await page.streamTextContent()
+        if (doc.__foliatePDFRenderToken !== renderToken) return
+        const container = doc.querySelector('.textLayer')
+        doc.__foliatePDFTextLayer?.cancel?.()
+        container.replaceChildren()
+        const textLayer = new pdfjsLib.TextLayer({
+            textContentSource,
+            container, viewport,
+        })
+        doc.__foliatePDFTextLayer = textLayer
+        await textLayer.render()
+        if (doc.__foliatePDFTextLayer === textLayer)
+            doc.__foliatePDFTextLayer = null
+        if (doc.__foliatePDFRenderToken !== renderToken) return
+
+        // hide "offscreen" canvases appended to document when rendering text layer
+        // https://github.com/mozilla/pdf.js/blob/642b9a5ae67ef642b9a8808fd9efd447e8c350e2/web/pdf_viewer.css#L51-L58
+        for (const canvas of document.querySelectorAll('.hiddenCanvasElement'))
+            Object.assign(canvas.style, {
+                position: 'absolute',
+                top: '0',
+                left: '0',
+                width: '0',
+                height: '0',
+                display: 'none',
+            })
+
+        // fix text selection
+        // https://github.com/mozilla/pdf.js/blob/642b9a5ae67ef642b9a8808fd9efd447e8c350e2/web/text_layer_builder.js#L105-L107
+        const endOfContent = doc.createElement('div')
+        endOfContent.className = 'endOfContent'
+        container.append(endOfContent)
+        // TODO: this only works in Firefox; see https://github.com/mozilla/pdf.js/pull/17923
+        container.onpointerdown = () => container.classList.add('selecting')
+        container.onpointerup = () => container.classList.remove('selecting')
+    } catch (error) {
+        if (error?.name !== 'RenderingCancelledException')
+            console.warn('PDF text layer render failed', error)
+    }
+
+    try {
+        const annotations = await page.getAnnotations()
+        if (doc.__foliatePDFRenderToken !== renderToken) return
+        const div = doc.querySelector('.annotationLayer')
+        div.replaceChildren()
+        const linkService = {
+            goToDestination: () => {},
+            getDestinationHash: dest => JSON.stringify(dest),
+            addLinkAttributes: (link, url) => link.href = url,
+        }
+        await new pdfjsLib.AnnotationLayer({ page, viewport, div, linkService })
+            .render({ annotations })
+    } catch (error) {
+        console.warn('PDF annotation layer render failed', error)
+    }
 }
 
 const renderPage = async (page, getImageBlob) => {
@@ -130,7 +169,16 @@ const renderPage = async (page, getImageBlob) => {
             inset: 0;
         }
         #canvas { z-index: 0; }
-        #canvas canvas { display: block; }
+        #canvas canvas, #canvas img { display: block; }
+        #canvas.render-error {
+            box-sizing: border-box;
+            display: grid;
+            place-items: center;
+            padding: 2rem;
+            color: #a51d2d;
+            font: 14px/1.5 system-ui, sans-serif;
+            text-align: center;
+        }
         .textLayer { z-index: 2; }
         .annotationLayer { z-index: 3; }
         /*
@@ -149,8 +197,12 @@ const renderPage = async (page, getImageBlob) => {
         <div class="textLayer"></div>
         <div class="annotationLayer"></div>
     `], { type: 'text/html' }))
-    const onZoom = ({ doc, scale }) => render(page, doc, scale)
-        .catch(error => console.error('PDF page render failed', error))
+    const onZoom = ({ doc, scale }) => render(page, doc, scale).catch(error => {
+        console.error('PDF page render failed', error)
+        const container = doc.querySelector('#canvas')
+        container.className = 'render-error'
+        container.textContent = `PDF 页面渲染失败：${error?.message || String(error)}`
+    })
     return { src, onZoom }
 }
 
@@ -170,7 +222,9 @@ export const makePDF = async file => {
     const pdf = await pdfjsLib.getDocument({
         range: transport,
         cMapUrl: pdfjsPath('cmaps/'),
+        iccUrl: pdfjsPath('iccs/'),
         standardFontDataUrl: pdfjsPath('standard_fonts/'),
+        wasmUrl: pdfjsPath('wasm/'),
         isEvalSupported: false,
     }).promise
 

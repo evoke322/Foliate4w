@@ -30,10 +30,9 @@ GJS, libadwaita, WebKitGTK, Electron, and bundled Chromium runtimes.
 - Support Windows 10 and Windows 11 on x64.
 - Reuse the WebView2 Runtime normally available on modern Windows systems.
 - Keep the executable and release packages as small as practical.
-- Produce both an installer and a truly portable ZIP package with GitHub
-  Actions.
-- Keep the portable edition self-contained and free of application-created
-  registry entries.
+- Produce a truly portable ZIP package with GitHub Actions.
+- Keep the portable edition self-contained and free of automatic
+  application-created registry entries.
 
 ## Book Formats
 
@@ -63,13 +62,16 @@ in the upstream project.
 - Typography controls for fonts, sizing, alignment, hyphenation, margins,
   column limits, animation, cursor hiding, and dark-mode page inversion
 - Searchable Windows system-font choices loaded once when preferences open
-- Separate interface, reflowable e-book, PDF, and selection-tool preferences
+- Separate interface, reflowable e-book, PDF, selection-tool, and Windows
+  system-integration preferences
 - Mouse-wheel page turning in paginated layouts
 - Configurable selection toolbar visibility and per-tool enable/disable choices
 - Location navigation with remaining time, sections, publication page list,
-  landmarks, EPUB CFI copy/paste, and chapter marks on the progress bar
+  landmarks, and EPUB CFI copy/paste
 - Local library with multi-book import, grid/list views, metadata search,
   covers, progress, stable book identity, and multi-window synchronization
+- Configurable open-and-auto-import or open-with-manual-import library behavior
+- Explicit per-user file-association controls and desktop-shortcut management
 - Bookmarks and searchable annotation lists
 - Highlights, underline/squiggly/strikethrough styles, custom colors,
   annotation notes, undo, and Foliate JSON/HTML/Markdown/Org import/export
@@ -92,35 +94,16 @@ fixed-layout publications. Lookup tools require a network connection.
 The original Foliate still has features not yet ported completely, including a
 full text-to-speech controller, media overlays, and OPDS catalogs.
 
-Installed builds store the original Windows path for an imported library book,
+Desktop builds store the original Windows path for an imported library book,
 not another copy of the complete book. IndexedDB contains that path together
 with the cover, metadata, progress, bookmarks, and annotations. In the portable
 edition this database remains under `Data/WebView2`. Moving or deleting the
 original book makes the library link unavailable until the file is imported
 again. The settings page can remove retained reading data and temporary files.
 
-## Windows Packages
+## Windows Package
 
-The release workflow is intended to produce two x64 packages from the same
-source code.
-
-### Installer Edition
-
-The installer edition is designed to:
-
-- be distributed as `Foliate-Windows-x64-Setup.exe`;
-- install Foliate for the current Windows user;
-- add normal uninstall information;
-- show the interactive Microsoft WebView2 bootstrapper when the Runtime is
-  missing, allowing the user to confirm or cancel installation;
-- register supported book formats so Foliate appears as an **Open with** choice;
-- leave the user's current default applications unchanged;
-- store settings and application data in the normal per-user Windows
-  locations.
-
-Users can select Foliate manually through Windows **Open with**, or pass a book
-path to the executable. Registration only advertises that Foliate can open the
-supported formats; it does not silently make Foliate the default reader.
+The release workflow produces one Windows x64 portable package.
 
 ### Portable Edition
 
@@ -128,8 +111,9 @@ The portable edition is designed to:
 
 - be distributed as `Foliate-Windows-x64-Portable.zip`;
 - run after extraction without installation;
-- create no file associations;
-- intentionally create no application registry entries;
+- create no file associations or application registry entries automatically;
+- change per-user file associations only after the user explicitly selects the
+  corresponding action in Settings, with a matching removal action;
 - keep settings, library data, reading positions, covers, caches, logs, and the
   WebView2 user-data directory under `Data` beside the executable;
 - never silently fall back to `%APPDATA%`, `%LOCALAPPDATA%`, or another
@@ -147,6 +131,8 @@ Foliate-Portable/
     ├── config/
     ├── covers/
     ├── library/
+    ├── logs/
+    ├── temp/
     └── WebView2/
 ```
 
@@ -162,10 +148,8 @@ For release packages:
 - Microsoft WebView2 Runtime
 
 Windows 11 and most maintained Windows 10 installations already include the
-Evergreen WebView2 Runtime. When it is missing, the installer edition starts
-the bootstrapper interactively instead of installing it silently. To remain
-self-contained and avoid system changes, the portable edition expects WebView2
-to be available already.
+Evergreen WebView2 Runtime. To remain self-contained and avoid automatic system
+changes, the portable edition expects WebView2 to be available already.
 
 For development:
 
@@ -255,18 +239,15 @@ The completed workflow will:
 3. restore npm and Cargo caches;
 4. install dependencies from lockfiles;
 5. build and validate the web frontend;
-6. build the Windows x64 executable;
-7. create the installer edition with Open-with registration but without
-   replacing the user's default applications;
-8. create the isolated portable directory;
-9. archive the portable directory as a ZIP file;
-10. upload both packages as workflow artifacts;
-11. attach both packages to the published GitHub Release that triggered the
-    workflow.
+6. build the Windows x64 executable without an installer bundle;
+7. create the isolated portable directory;
+8. archive the portable directory as a ZIP file;
+9. upload the package as a workflow artifact;
+10. attach it to the published GitHub Release that triggered the workflow.
 
 Pushes to `main` or `master`, pull requests, and tag pushes do not trigger
-packaging. Publish a GitHub Release (for example with tag `v0.1.2`) to start the
-Windows build and upload both packages to that Release.
+packaging. Publish a GitHub Release (for example with tag `v0.1.3`) to start the
+Windows build and upload the portable package to that Release.
 
 ## Architecture
 
@@ -276,7 +257,7 @@ Windows build and upload both packages to that Release.
 - `src-tauri/` — lightweight native Windows shell
 - `.github/workflows/` — automated Windows builds
 
-The installed application uses the native Windows file picker so selected
+The desktop application uses the native Windows file picker so selected
 books retain their filesystem paths. Those paths are exposed through a
 Blob-like range reader backed by Tauri IPC. EPUB and PDF parsers can therefore
 request only the ranges they need instead of first transferring the complete
@@ -310,7 +291,7 @@ without bundling WebView2.
   reader's content security policy.
 - External links are opened only after an explicit user action and are handed
   to the Windows default browser.
-- The portable edition will isolate all application-controlled persistent data
+- The portable edition isolates all application-controlled persistent data
   beneath its local `Data` directory.
 
 ## Relationship to Foliate
