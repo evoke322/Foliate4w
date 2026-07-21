@@ -5,8 +5,6 @@
 
 Read books in style on Windows.
 
-[简体中文](README-zh.md) | English
-
 Foliate for Windows is a lightweight Windows port of
 [Foliate](https://github.com/johnfactotum/foliate). It reuses the
 [`foliate-js`](https://github.com/johnfactotum/foliate-js) reading engine and
@@ -33,6 +31,9 @@ GJS, libadwaita, WebKitGTK, Electron, and bundled Chromium runtimes.
 - Produce a truly portable ZIP package with GitHub Actions.
 - Keep the portable edition self-contained and free of automatic
   application-created registry entries.
+- Offer an NSIS installer (x64 and x86) that registers file associations
+  on demand, stores per-user settings under `%LOCALAPPDATA%`, and uninstalls
+  cleanly.
 
 ## Book Formats
 
@@ -61,6 +62,8 @@ in the upstream project.
 - Foliate-style reader sidebar, toolbar, and bottom navigation
 - Typography controls for fonts, sizing, alignment, hyphenation, margins,
   column limits, animation, cursor hiding, and dark-mode page inversion
+- White-background content toggle (default on; off switches the page to the
+  dark reading palette, independent of the interface theme)
 - Searchable Windows system-font choices loaded once when preferences open
 - Separate interface, reflowable e-book, PDF, selection-tool, and Windows
   system-integration preferences
@@ -81,7 +84,7 @@ in the upstream project.
 - Illustration viewer with zoom, pan, rotation, inversion, copy, and save
 - Fullscreen, window-state restore, reload, duplicate windows, printing,
   shortcut help, detailed errors, and an About/debug dialog
-- Simplified Chinese and English interface modes
+- English (default) and Simplified Chinese (opt-in) interface modes
 - Publication-defined vertical writing, right-to-left reading, and fixed layout
 - Range-based loading for books selected through the native Windows picker,
   opened from the library, or passed on the command line, avoiding an
@@ -103,7 +106,30 @@ again. The settings page can remove retained reading data and temporary files.
 
 ## Windows Package
 
-The release workflow produces one Windows x64 portable package.
+The release workflow produces three Windows packages: a portable zip and
+two NSIS installers (x64 and x86).
+
+### Installer Edition
+
+The installer edition is designed to:
+
+- be distributed as `Foliate-Windows-x64-Installer.exe` (64-bit) and
+  `Foliate-Windows-x86-Installer.exe` (32-bit);
+- install per-user (no administrator elevation required);
+- register e-book file associations via the bundled
+  `installer-hooks.nsh` (the same hook also unregisters them on
+  uninstall);
+- embed the Foliate icon (`icons/icon.ico`, derived from the
+  `web/public/assets/foliate.svg` logo used in this README) as both the
+  installer .exe icon and the installed application icon;
+- store settings, library data, reading positions, covers, caches, and
+  WebView2 user data under `%LOCALAPPDATA%\<binary-name>\EBWebView` (the
+  WebView2 default), so they persist across app and device restarts — no
+  code-override of `WEBVIEW2_USER_DATA_FOLDER` in installed mode;
+- uninstall cleanly: in addition to the Tauri NSIS template's default
+  removal of `$INSTDIR`, the uninstall hook removes the
+  `%LOCALAPPDATA%\<binary-name>` tree and the per-user file-association
+  registry keys, leaving no orphaned library or settings data.
 
 ### Portable Edition
 
@@ -305,6 +331,19 @@ Please report Windows-port issues to this project's issue tracker. Issues with
 the upstream GTK application or `foliate-js` should be reproduced and reported
 to their respective upstream projects when appropriate.
 
+### Fork notice
+
+This repository (`vihaanvp/Foliate4w`) is a modified fork of
+[`evoke322/Foliate4w`](https://github.com/evoke322/Foliate4w) (upstream tag
+`0.1.3`, commit `8a44331`). Changes layered on top of that merge base are
+documented in [`CHANGELOG.md`](CHANGELOG.md) under entry `0.1.4`
+(English-first localization with optional Simplified Chinese, a
+`view.close()` error-masking fix in the reader, a white-background content
+toggle, third-party license-text bundling, and release-workflow changes).
+The modification notice travels with the portable distribution as
+`CHANGELOG.md` at the archive root, per GPLv3 §5(a). No additional
+restrictions beyond the upstream GPLv3 terms are imposed.
+
 ## License
 
 Foliate for Windows is free software licensed under the
@@ -318,7 +357,7 @@ Bundled or used components include:
 - [zip.js](https://github.com/gildas-lormeau/zip.js), BSD-3-Clause
 - [fflate](https://github.com/101arrowz/fflate), MIT
 - [PDF.js](https://github.com/mozilla/pdf.js), Apache-2.0
-- [Tauri](https://tauri.app/), Apache-2.0 and MIT
+- [Tauri](https://tauri.app/), Apache-2.0 OR MIT (this fork invokes the MIT grant; see `Licenses/Tauri-LICENSE-MIT.txt`)
 - [Lucide](https://lucide.dev/), ISC
 
 Microsoft WebView2 is a Windows runtime dependency and is not bundled in the
