@@ -48,5 +48,19 @@
   !insertmacro FOLIATE_UNREGISTER_TYPE "pdf"
   DeleteRegKey SHCTX "Software\Classes\Applications\${MAINBINARYNAME}.exe"
   DeleteRegKey SHCTX "Software\Classes\${FOLIATE_PROGID}"
+
+  ; Remove WebView2 user-data folder so uninstall leaves the system clean.
+  ; In currentUser install mode, WebView2 stores localStorage, IndexedDB, and
+  ; the library database under %LOCALAPPDATA% by default (no code-override of
+  ; WEBVIEW2_USER_DATA_FOLDER for installed mode). The exact subfolder varies
+  ; between WebView2/Tauri versions; clean all known candidates.
+  RMDir /r "$LOCALAPPDATA\${MAINBINARYNAME}"
+  RMDir /r "$LOCALAPPDATA\com.github.evoke322.foliate4w"
+  RMDir /r "$LOCALAPPDATA\${PRODUCTNAME}"
+
+  ; Remove the managed "books" folder created by the Copy-Books-to-Library
+  ; feature so the system is left clean. The directory is %LOCALAPPDATA%\Foliate.
+  RMDir /r "$LOCALAPPDATA\Foliate"
+
   !insertmacro UPDATEFILEASSOC
 !macroend

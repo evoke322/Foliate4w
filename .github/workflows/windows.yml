@@ -3,6 +3,7 @@ name: Build Windows
 on:
   release:
     types: [published]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -27,7 +28,7 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: x86_64-pc-windows-msvc
+          targets: x86_64-pc-windows-msvc i686-pc-windows-msvc
 
       - name: Cache Rust build
         uses: swatinem/rust-cache@v2
@@ -45,6 +46,12 @@ jobs:
 
       - name: Build portable executable
         run: npm run build:portable
+
+      - name: Build NSIS installer (x64)
+        run: npm run build:installer
+
+      - name: Build NSIS installer (x86)
+        run: npm run build:installer:x86
 
       - name: Stage release packages
         shell: pwsh
@@ -86,10 +93,23 @@ jobs:
             (Join-Path $licenses 'PDF.js-QCMS-Wrapper.txt')
           Copy-Item 'web/public/foliate-js/vendor/pdfjs/iccs/LICENSE' `
             (Join-Path $licenses 'PDF.js-ICC-Profiles.txt')
+          # ponytail: zip.js and fflate are vendored under foliate-js/vendor as
+          # bare .js files (no upstream LICENSE shipped alongside). Bundle the
+          # texts from Licenses/ so MIT (fflate) and BSD-3-Clause (zip.js)
+          # attribution obligations are met in the binary distribution.
+          Copy-Item 'Licenses/zip.js-BSD-3-Clause.txt' `
+            (Join-Path $licenses 'zip.js-BSD-3-Clause.txt')
+          Copy-Item 'Licenses/fflate-MIT.txt' `
+            (Join-Path $licenses 'fflate-MIT.txt')
+          Copy-Item 'Licenses/Tauri-LICENSE-MIT.txt' `
+            (Join-Path $licenses 'Tauri-LICENSE-MIT.txt')
+          # GPLv3 §5(a): ship modification history alongside the binary so a
+          # recipient without GitHub access can still see what changed from upstream.
+          Copy-Item 'CHANGELOG.md' (Join-Path $portable 'CHANGELOG.md')
 
           $data = Join-Path $portable 'Data'
           foreach ($directory in @(
-            'cache', 'config', 'covers', 'library', 'logs', 'temp', 'WebView2'
+            'books', 'cache', 'config', 'covers', 'library', 'logs', 'temp', 'WebView2'
           )) {
             New-Item -ItemType Directory -Force -Path (Join-Path $data $directory) | Out-Null
           }
@@ -103,6 +123,22 @@ jobs:
             -DestinationPath (Join-Path $release 'Foliate-Windows-x64-Portable.zip') `
             -CompressionLevel Optimal
 
+          # Stage NSIS installer exe files with predictable names. productName
+          # has spaces so we glob and rename; Tauri leaves them as
+          # "<productName>_<version>_<arch>-setup.exe" by default.
+          foreach ($target in @(
+            @{ triple = 'x86_64-pc-windows-msvc'; out = 'Foliate-Windows-x64-Installer.exe' },
+            @{ triple = 'i686-pc-windows-msvc';  out = 'Foliate-Windows-x86-Installer.exe' }
+          )) {
+            $nsis_dir = "src-tauri/target/$($target.triple)/release/bundle/nsis"
+            $exe = Get-ChildItem -Path $nsis_dir -Filter '*.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($exe) {
+              Copy-Item $exe.FullName (Join-Path $release $target.out)
+            } else {
+              Write-Warning "No NSIS installer found for $($target.triple); skipping."
+            }
+          }
+
       - name: Upload portable edition
         uses: actions/upload-artifact@v7
         with:
@@ -110,26 +146,16 @@ jobs:
           if-no-files-found: error
           path: release/Foliate-Windows-x64-Portable.zip
 
-  release:
-    name: Publish GitHub Release
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
-    steps:
-      - name: Download portable edition
-        uses: actions/download-artifact@v8
+      - name: Upload x64 installer
+        uses: actions/upload-artifact@v7
         with:
-          name: Foliate-Windows-x64-Portable
-          path: release
+          name: Foliate-Windows-x64-Installer
+          if-no-files-found: error
+          path: release/Foliate-Windows-x64-Installer.exe
 
-      - name: Publish release assets
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          TAG: ${{ github.event.release.tag_name }}
-        run: |
-          gh release upload "$TAG" \
-            release/Foliate-Windows-x64-Portable.zip \
-            --clobber
+      - name: Upload x86 installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: Foliate-Windows-x86-Installer
+          if-no-files-found: error
+          path: release/Foliate-Windows-x86-Installer.exe

@@ -1531,6 +1531,12 @@ dialog::backdrop {
     text-align: left;
 }
 
+.about-card .about-disclosure {
+    margin-top: 4px;
+    color: var(--text-muted, #888);
+    font-size: 0.9em;
+}
+
 .image-viewer-dialog {
     width: 100vw;
     max-width: none;

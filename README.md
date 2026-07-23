@@ -5,8 +5,6 @@
 
 Read books in style on Windows.
 
-[简体中文](README-zh.md) | English
-
 Foliate for Windows is a lightweight Windows port of
 [Foliate](https://github.com/johnfactotum/foliate). It reuses the
 [`foliate-js`](https://github.com/johnfactotum/foliate-js) reading engine and
@@ -33,6 +31,20 @@ GJS, libadwaita, WebKitGTK, Electron, and bundled Chromium runtimes.
 - Produce a truly portable ZIP package with GitHub Actions.
 - Keep the portable edition self-contained and free of automatic
   application-created registry entries.
+- Offer an NSIS installer (x64 and x86) that registers file associations
+  on demand, stores per-user settings under `%LOCALAPPDATA%`, and uninstalls
+  cleanly.
+
+## AI-Assisted Development
+
+All contributions by vihaanvp to this project were made using OpenCode,
+an AI coding agent. This applies to the v0.1.4, v0.1.5, and any future
+commits on the
+[vihaanvp/Foliate4w](https://github.com/vihaanvp/Foliate4w) fork. The
+vendored `foliate-js` engine is unchanged from the upstream MIT project —
+only the desktop shell, packaging, installer, and preferences are
+AI-assisted. Upstream maintainers reviewing this work should treat the
+contributions accordingly.
 
 ## Book Formats
 
@@ -61,6 +73,8 @@ in the upstream project.
 - Foliate-style reader sidebar, toolbar, and bottom navigation
 - Typography controls for fonts, sizing, alignment, hyphenation, margins,
   column limits, animation, cursor hiding, and dark-mode page inversion
+- White-background content toggle (default on; off switches the page to the
+  dark reading palette, independent of the interface theme)
 - Searchable Windows system-font choices loaded once when preferences open
 - Separate interface, reflowable e-book, PDF, selection-tool, and Windows
   system-integration preferences
@@ -71,6 +85,8 @@ in the upstream project.
 - Local library with multi-book import, grid/list views, metadata search,
   covers, progress, stable book identity, and multi-window synchronization
 - Configurable open-and-auto-import or open-with-manual-import library behavior
+- Optional "Copy Books to Library Folder" (default on) — managed copies keep
+  library entries openable after the original file is moved or deleted
 - Explicit per-user file-association controls and desktop-shortcut management
 - Bookmarks and searchable annotation lists
 - Highlights, underline/squiggly/strikethrough styles, custom colors,
@@ -81,7 +97,7 @@ in the upstream project.
 - Illustration viewer with zoom, pan, rotation, inversion, copy, and save
 - Fullscreen, window-state restore, reload, duplicate windows, printing,
   shortcut help, detailed errors, and an About/debug dialog
-- Simplified Chinese and English interface modes
+- English (default) and Simplified Chinese (opt-in) interface modes
 - Publication-defined vertical writing, right-to-left reading, and fixed layout
 - Range-based loading for books selected through the native Windows picker,
   opened from the library, or passed on the command line, avoiding an
@@ -95,15 +111,44 @@ The original Foliate still has features not yet ported completely, including a
 full text-to-speech controller, media overlays, and OPDS catalogs.
 
 Desktop builds store the original Windows path for an imported library book,
-not another copy of the complete book. IndexedDB contains that path together
-with the cover, metadata, progress, bookmarks, and annotations. In the portable
-edition this database remains under `Data/WebView2`. Moving or deleting the
-original book makes the library link unavailable until the file is imported
-again. The settings page can remove retained reading data and temporary files.
+not another copy of the complete book — *unless* **Copy Books to Library
+Folder** is on (default). When it is, every book picked through the native
+file picker or opened via file association is first copied into Foliate's
+managed library folder (`Data/books/` portable, `%LOCALAPPDATA%\Foliate\books\`
+installed) before being imported or read. The library record (in IndexedDB,
+kept under `Data/WebView2` on the portable edition) then points at the managed
+copy, so moving or deleting the original file does not break the library link.
+Turning the preference off reverts to the v0.1.4 behaviour — the record keeps
+the original path and stops opening once that file moves. Either way, IndexedDB
+also carries the cover, metadata, progress, bookmarks, and annotations, and
+the settings page can remove retained reading data and temporary files.
 
 ## Windows Package
 
-The release workflow produces one Windows x64 portable package.
+The release workflow produces three Windows packages: a portable zip and
+two NSIS installers (x64 and x86).
+
+### Installer Edition
+
+The installer edition is designed to:
+
+- be distributed as `Foliate-Windows-x64-Installer.exe` (64-bit) and
+  `Foliate-Windows-x86-Installer.exe` (32-bit);
+- install per-user (no administrator elevation required);
+- register e-book file associations via the bundled
+  `installer-hooks.nsh` (the same hook also unregisters them on
+  uninstall);
+- embed the Foliate icon (`icons/icon.ico`, derived from the
+  `web/public/assets/foliate.svg` logo used in this README) as both the
+  installer .exe icon and the installed application icon;
+- store settings, library data, reading positions, covers, caches, and
+  WebView2 user data under `%LOCALAPPDATA%\<binary-name>\EBWebView` (the
+  WebView2 default), so they persist across app and device restarts — no
+  code-override of `WEBVIEW2_USER_DATA_FOLDER` in installed mode;
+- uninstall cleanly: in addition to the Tauri NSIS template's default
+  removal of `$INSTDIR`, the uninstall hook removes the
+  `%LOCALAPPDATA%\<binary-name>` tree and the per-user file-association
+  registry keys, leaving no orphaned library or settings data.
 
 ### Portable Edition
 
@@ -305,6 +350,19 @@ Please report Windows-port issues to this project's issue tracker. Issues with
 the upstream GTK application or `foliate-js` should be reproduced and reported
 to their respective upstream projects when appropriate.
 
+### Fork notice
+
+This repository (`vihaanvp/Foliate4w`) is a modified fork of
+[`evoke322/Foliate4w`](https://github.com/evoke322/Foliate4w) (upstream tag
+`0.1.3`, commit `8a44331`). Changes layered on top of that merge base are
+documented in [`CHANGELOG.md`](CHANGELOG.md) under entry `0.1.4`
+(English-first localization with optional Simplified Chinese, a
+`view.close()` error-masking fix in the reader, a white-background content
+toggle, third-party license-text bundling, and release-workflow changes).
+The modification notice travels with the portable distribution as
+`CHANGELOG.md` at the archive root, per GPLv3 §5(a). No additional
+restrictions beyond the upstream GPLv3 terms are imposed.
+
 ## License
 
 Foliate for Windows is free software licensed under the
@@ -318,7 +376,7 @@ Bundled or used components include:
 - [zip.js](https://github.com/gildas-lormeau/zip.js), BSD-3-Clause
 - [fflate](https://github.com/101arrowz/fflate), MIT
 - [PDF.js](https://github.com/mozilla/pdf.js), Apache-2.0
-- [Tauri](https://tauri.app/), Apache-2.0 and MIT
+- [Tauri](https://tauri.app/), Apache-2.0 OR MIT (this fork invokes the MIT grant; see `Licenses/Tauri-LICENSE-MIT.txt`)
 - [Lucide](https://lucide.dev/), ISC
 
 Microsoft WebView2 is a Windows runtime dependency and is not bundled in the

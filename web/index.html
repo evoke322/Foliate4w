@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -20,26 +20,26 @@
                 <div class="app-actions">
                     <div class="library-search">
                         <i data-lucide="search"></i>
-                        <input id="library-search-input" type="search" placeholder="搜索书库…" autocomplete="off">
+                        <input id="library-search-input" type="search" placeholder="Search library…" autocomplete="off">
                     </div>
-                    <button class="icon-button" id="library-view-button" type="button" title="切换列表视图" aria-label="切换列表视图">
+                    <button class="icon-button" id="library-view-button" type="button" title="Switch to List View" aria-label="Switch to List View">
                         <i data-lucide="list"></i>
                     </button>
-                    <button class="icon-button" id="theme-button" type="button" title="切换深色模式" aria-label="切换深色模式">
+                    <button class="icon-button" id="theme-button" type="button" title="Switch to Dark Mode" aria-label="Switch to Dark Mode">
                         <i data-lucide="moon"></i>
                     </button>
-                    <button class="icon-button" id="library-preferences-button" type="button" title="设置" aria-label="设置">
+                    <button class="icon-button" id="library-preferences-button" type="button" title="Settings" aria-label="Settings">
                         <i data-lucide="settings-2"></i>
                     </button>
                     <button class="command-button" id="import-button" type="button">
                         <i data-lucide="plus"></i>
-                        <span>导入图书</span>
+                        <span>Import Books</span>
                     </button>
                     <button class="command-button" id="open-button" type="button">
                         <i data-lucide="folder-open"></i>
-                        <span>打开电子书</span>
+                        <span>Open Book</span>
                     </button>
-                    <button class="icon-button" id="about-button" type="button" title="关于 Foliate" aria-label="关于 Foliate">
+                    <button class="icon-button" id="about-button" type="button" title="About Foliate" aria-label="About Foliate">
                         <i data-lucide="info"></i>
                     </button>
                 </div>
@@ -51,33 +51,33 @@
                 <div class="empty-library-actions">
                     <button class="primary-button" id="empty-open-button" type="button">
                         <i data-lucide="folder-open"></i>
-                        <span>打开电子书</span>
+                        <span>Open Book</span>
                     </button>
                     <button class="flat-button" id="empty-import-button" type="button">
                         <i data-lucide="book-open"></i>
-                        <span>导入图书</span>
+                        <span>Import Books</span>
                     </button>
                 </div>
             </section>
             <section id="library-content" class="library-content" hidden>
                 <div id="library-grid" class="library-grid" aria-live="polite"></div>
-                <div id="library-no-results" class="panel-empty" hidden>没有匹配的图书</div>
+                <div id="library-no-results" class="panel-empty" hidden>No matching books</div>
             </section>
         </main>
 
         <main id="reader-view" class="reader-view" hidden>
             <div id="reader-dimmer" class="reader-dimmer" hidden></div>
-            <aside id="sidebar" class="sidebar" aria-label="图书导航">
+            <aside id="sidebar" class="sidebar" aria-label="Book Navigation">
                 <header class="sidebar-toolbar">
-                    <button class="library-button" id="library-button" type="button">书库</button>
+                    <button class="library-button" id="library-button" type="button">Library</button>
                     <div class="sidebar-tools">
-                        <button class="icon-button" id="search-button" type="button" title="在书中搜索" aria-label="在书中搜索">
+                        <button class="icon-button" id="search-button" type="button" title="Search in Book" aria-label="Search in Book">
                             <i data-lucide="search"></i>
                         </button>
-                        <button class="icon-button" id="reader-menu-button" type="button" title="阅读器菜单" aria-label="阅读器菜单">
+                        <button class="icon-button" id="reader-menu-button" type="button" title="Reader Menu" aria-label="Reader Menu">
                             <i data-lucide="menu"></i>
                         </button>
-                        <button class="icon-button selected" id="sidebar-pin" type="button" title="取消固定侧栏" aria-label="取消固定侧栏" aria-pressed="true">
+                        <button class="icon-button selected" id="sidebar-pin" type="button" title="Unpin Sidebar" aria-label="Unpin Sidebar" aria-pressed="true">
                             <i data-lucide="pin"></i>
                         </button>
                     </div>
@@ -86,36 +86,36 @@
                 <div id="book-search" class="book-search-area" hidden>
                     <div class="book-search">
                         <i data-lucide="search"></i>
-                        <input id="book-search-input" type="search" placeholder="在书中查找…" autocomplete="off">
-                        <button class="icon-button compact" id="search-previous" type="button" title="上一个结果" aria-label="上一个结果" disabled>
+                        <input id="book-search-input" type="search" placeholder="Find in book…" autocomplete="off">
+                        <button class="icon-button compact" id="search-previous" type="button" title="Previous Result" aria-label="Previous Result" disabled>
                             <span aria-hidden="true">↑</span>
                         </button>
-                        <button class="icon-button compact" id="search-next" type="button" title="下一个结果" aria-label="下一个结果" disabled>
+                        <button class="icon-button compact" id="search-next" type="button" title="Next Result" aria-label="Next Result" disabled>
                             <span aria-hidden="true">↓</span>
                         </button>
-                        <button class="icon-button compact" id="search-close" type="button" title="关闭搜索" aria-label="关闭搜索">
+                        <button class="icon-button compact" id="search-close" type="button" title="Close Search" aria-label="Close Search">
                             <i data-lucide="x"></i>
                         </button>
                     </div>
                     <div class="search-options">
-                        <select id="search-scope" aria-label="搜索范围">
-                            <option value="book">整本书</option>
-                            <option value="section">当前章节</option>
+                        <select id="search-scope" aria-label="Search scope">
+                            <option value="book">Whole book</option>
+                            <option value="section">Current section</option>
                         </select>
-                        <label class="search-option-button" title="完整单词">
+                        <label class="search-option-button" title="Whole words">
                             <input id="search-whole-words" type="checkbox">
                             <i data-lucide="whole-word"></i>
-                            <span class="visually-hidden">完整单词</span>
+                            <span class="visually-hidden">Whole words</span>
                         </label>
-                        <label class="search-option-button" title="区分大小写">
+                        <label class="search-option-button" title="Match case">
                             <input id="search-match-case" type="checkbox">
                             <i data-lucide="case-sensitive"></i>
-                            <span class="visually-hidden">区分大小写</span>
+                            <span class="visually-hidden">Match case</span>
                         </label>
-                        <label class="search-option-button" title="区分音调符号">
+                        <label class="search-option-button" title="Match diacritics">
                             <input id="search-diacritics" type="checkbox">
                             <i data-lucide="baseline"></i>
-                            <span class="visually-hidden">区分音调符号</span>
+                            <span class="visually-hidden">Match diacritics</span>
                         </label>
                     </div>
                 </div>
@@ -123,81 +123,81 @@
                 <section class="book-summary">
                     <img id="book-cover" alt="" hidden>
                     <div class="book-summary-text">
-                        <h1 id="book-title">未命名图书</h1>
+                        <h1 id="book-title">Untitled Book</h1>
                         <p id="book-author"></p>
                     </div>
-                    <button class="icon-button" id="book-info-button" type="button" title="图书信息" aria-label="图书信息">
+                    <button class="icon-button" id="book-info-button" type="button" title="Book Information" aria-label="Book Information">
                         <i data-lucide="info"></i>
                     </button>
                 </section>
 
                 <div class="sidebar-content">
                     <section id="search-panel" class="sidebar-panel" hidden>
-                        <div id="search-status" class="search-status">输入关键词开始搜索</div>
+                        <div id="search-status" class="search-status">Type to search</div>
                         <div id="search-results" class="search-results"></div>
                     </section>
                     <section id="toc-panel" class="sidebar-panel">
-                        <nav id="toc" class="toc" aria-label="图书目录"></nav>
+                        <nav id="toc" class="toc" aria-label="Table of Contents"></nav>
                     </section>
                     <section id="annotations-panel" class="sidebar-panel" hidden>
-                        <input id="annotation-filter" class="panel-filter" type="search" placeholder="搜索批注…" autocomplete="off">
+                        <input id="annotation-filter" class="panel-filter" type="search" placeholder="Search annotations…" autocomplete="off">
                         <div id="annotations-empty" class="panel-empty">
                             <i data-lucide="highlighter"></i>
-                            <p>选择正文后即可添加批注。</p>
+                            <p>Select text in the book to add an annotation.</p>
                         </div>
                         <div id="annotations-list" class="annotation-list"></div>
                     </section>
                     <section id="bookmarks-panel" class="sidebar-panel" hidden>
-                        <input id="bookmark-filter" class="panel-filter" type="search" placeholder="搜索书签…" autocomplete="off">
+                        <input id="bookmark-filter" class="panel-filter" type="search" placeholder="Search bookmarks…" autocomplete="off">
                         <div id="bookmarks-empty" class="panel-empty">
                             <i data-lucide="bookmark"></i>
-                            <p>使用底部的书签按钮保存当前位置。</p>
+                            <p>Use the bookmark button below to save this location.</p>
                         </div>
                         <div id="bookmarks-list" class="bookmark-list"></div>
                     </section>
                 </div>
 
-                <nav class="sidebar-tabs" aria-label="侧栏内容">
+                <nav class="sidebar-tabs" aria-label="Sidebar Content">
                     <button class="sidebar-tab selected" type="button" data-panel="toc">
                         <i data-lucide="list-tree"></i>
-                        <span>目录</span>
+                        <span>Contents</span>
                     </button>
                     <button class="sidebar-tab" type="button" data-panel="annotations">
                         <i data-lucide="highlighter"></i>
-                        <span>批注</span>
+                        <span>Annotations</span>
                     </button>
                     <button class="sidebar-tab" type="button" data-panel="bookmarks">
                         <i data-lucide="bookmark"></i>
-                        <span>书签</span>
+                        <span>Bookmarks</span>
                     </button>
                 </nav>
             </aside>
 
             <section class="reading-pane">
                 <div class="reader-overlay-tools">
-                    <button class="icon-button raised" id="sidebar-open" type="button" title="显示侧栏" aria-label="显示侧栏" hidden>
+                    <button class="icon-button raised" id="sidebar-open" type="button" title="Show Sidebar" aria-label="Show Sidebar" hidden>
                         <i data-lucide="panel-left-open"></i>
                     </button>
                 </div>
                 <div id="reader-surface" class="reader-surface" tabindex="-1"></div>
                 <footer class="reader-navbar">
-                    <button class="icon-button" id="previous-button" type="button" title="上一页" aria-label="上一页">
+                    <button class="icon-button" id="previous-button" type="button" title="Previous Page" aria-label="Previous Page">
                         <i data-lucide="chevron-left"></i>
                     </button>
-                    <button class="icon-button" id="bookmark-button" type="button" title="添加书签" aria-label="添加书签">
+                    <button class="icon-button" id="bookmark-button" type="button" title="Add Bookmark" aria-label="Add Bookmark">
                         <i data-lucide="bookmark"></i>
                     </button>
                     <div class="progress-box">
-                        <input id="progress" type="range" min="0" max="1" step="any" value="0" aria-label="阅读进度">
+                        <input id="progress" type="range" min="0" max="1" step="any" value="0" aria-label="Reading progress">
                     </div>
-                    <button id="progress-label" class="progress-label" type="button" title="当前位置">0%</button>
-                    <button class="icon-button" id="history-back" type="button" title="返回" aria-label="返回" disabled>
+                    <button id="progress-label" class="progress-label" type="button" title="Current Location">0%</button>
+                    <button class="icon-button" id="history-back" type="button" title="Back" aria-label="Back" disabled>
                         <i data-lucide="undo-2"></i>
                     </button>
-                    <button class="icon-button" id="history-forward" type="button" title="前进" aria-label="前进" disabled>
+                    <button class="icon-button" id="history-forward" type="button" title="Forward" aria-label="Forward" disabled>
                         <i data-lucide="redo-2"></i>
                     </button>
-                    <button class="icon-button" id="next-button" type="button" title="下一页" aria-label="下一页">
+                    <button class="icon-button" id="next-button" type="button" title="Next Page" aria-label="Next Page">
                         <i data-lucide="chevron-right"></i>
                     </button>
                 </footer>
@@ -205,49 +205,49 @@
         </main>
 
         <div id="selection-popover" class="selection-popover popover" hidden>
-            <button type="button" data-selection-action="copy"><i data-lucide="copy"></i><span>复制</span></button>
-            <button type="button" data-selection-action="copy-citation"><i data-lucide="copy-check"></i><span>引用</span></button>
-            <button type="button" data-selection-action="copy-cfi" title="复制 EPUB CFI 位置标识"><i data-lucide="bookmark"></i><span>书签</span></button>
-            <button type="button" data-selection-action="find"><i data-lucide="search"></i><span>书内查找</span></button>
-            <button type="button" data-selection-action="speak"><i data-lucide="volume-2"></i><span>朗读</span></button>
-            <button type="button" data-selection-action="highlight"><i data-lucide="highlighter"></i><span>高亮</span></button>
-            <button type="button" data-selection-action="dictionary"><i data-lucide="book-marked"></i><span>词典</span></button>
+            <button type="button" data-selection-action="copy"><i data-lucide="copy"></i><span>Copy</span></button>
+            <button type="button" data-selection-action="copy-citation"><i data-lucide="copy-check"></i><span>Citation</span></button>
+            <button type="button" data-selection-action="copy-cfi" title="Copy EPUB CFI identifier"><i data-lucide="bookmark"></i><span>Bookmark</span></button>
+            <button type="button" data-selection-action="find"><i data-lucide="search"></i><span>Find</span></button>
+            <button type="button" data-selection-action="speak"><i data-lucide="volume-2"></i><span>Speak</span></button>
+            <button type="button" data-selection-action="highlight"><i data-lucide="highlighter"></i><span>Highlight</span></button>
+            <button type="button" data-selection-action="dictionary"><i data-lucide="book-marked"></i><span>Dictionary</span></button>
             <button type="button" data-selection-action="wikipedia"><i data-lucide="info"></i><span>Wikipedia</span></button>
-            <button type="button" data-selection-action="translate"><i data-lucide="languages"></i><span>翻译</span></button>
-            <button type="button" data-selection-action="print"><i data-lucide="printer"></i><span>打印</span></button>
+            <button type="button" data-selection-action="translate"><i data-lucide="languages"></i><span>Translate</span></button>
+            <button type="button" data-selection-action="print"><i data-lucide="printer"></i><span>Print</span></button>
         </div>
 
         <div id="annotation-popover" class="annotation-popover popover" hidden>
-            <div class="annotation-style-row" aria-label="批注样式">
-                <button type="button" class="color-swatch selected" data-color="#f6d32d" style="--swatch:#f6d32d" title="黄色"></button>
-                <button type="button" class="color-swatch" data-color="orange" style="--swatch:orange" title="橙色"></button>
-                <button type="button" class="color-swatch" data-color="red" style="--swatch:red" title="红色"></button>
-                <button type="button" class="color-swatch" data-color="#57e389" style="--swatch:#57e389" title="绿色"></button>
-                <button type="button" class="color-swatch" data-color="magenta" style="--swatch:magenta" title="洋红"></button>
-                <button type="button" class="color-swatch" data-color="aqua" style="--swatch:aqua" title="青色"></button>
-                <button type="button" class="color-swatch" data-color="lime" style="--swatch:lime" title="青柠"></button>
-                <button type="button" class="style-button" data-color="underline" title="下划线">U</button>
-                <button type="button" class="style-button" data-color="squiggly" title="波浪线">W</button>
-                <button type="button" class="style-button" data-color="strikethrough" title="删除线">S</button>
-                <label class="custom-color" title="自定义颜色"><input id="annotation-custom-color" type="color" value="#f6d32d"></label>
+            <div class="annotation-style-row" aria-label="Annotation Style">
+                <button type="button" class="color-swatch selected" data-color="#f6d32d" style="--swatch:#f6d32d" title="Yellow"></button>
+                <button type="button" class="color-swatch" data-color="orange" style="--swatch:orange" title="Orange"></button>
+                <button type="button" class="color-swatch" data-color="red" style="--swatch:red" title="Red"></button>
+                <button type="button" class="color-swatch" data-color="#57e389" style="--swatch:#57e389" title="Green"></button>
+                <button type="button" class="color-swatch" data-color="magenta" style="--swatch:magenta" title="Magenta"></button>
+                <button type="button" class="color-swatch" data-color="aqua" style="--swatch:aqua" title="Cyan"></button>
+                <button type="button" class="color-swatch" data-color="lime" style="--swatch:lime" title="Lime"></button>
+                <button type="button" class="style-button" data-color="underline" title="Underline">U</button>
+                <button type="button" class="style-button" data-color="squiggly" title="Squiggly">W</button>
+                <button type="button" class="style-button" data-color="strikethrough" title="Strikethrough">S</button>
+                <label class="custom-color" title="Custom Color"><input id="annotation-custom-color" type="color" value="#f6d32d"></label>
             </div>
-            <textarea id="annotation-note" rows="4" placeholder="添加笔记…"></textarea>
+            <textarea id="annotation-note" rows="4" placeholder="Add a note…"></textarea>
             <div class="annotation-actions">
-                <button class="danger-button" id="annotation-delete" type="button"><i data-lucide="trash-2"></i>删除</button>
-                <button class="primary-button small" id="annotation-save" type="button">完成</button>
+                <button class="danger-button" id="annotation-delete" type="button"><i data-lucide="trash-2"></i>Delete</button>
+                <button class="primary-button small" id="annotation-save" type="button">Done</button>
             </div>
         </div>
 
         <dialog id="footnote-dialog" class="content-dialog">
             <div class="dialog-card">
                 <header>
-                    <h2 id="footnote-title">脚注</h2>
-                    <button class="icon-button" type="button" data-dialog-close aria-label="关闭"><i data-lucide="x"></i></button>
+                    <h2 id="footnote-title">Footnote</h2>
+                    <button class="icon-button" type="button" data-dialog-close aria-label="Close"><i data-lucide="x"></i></button>
                 </header>
                 <main id="footnote-content"></main>
                 <footer>
-                    <button class="flat-button" type="button" data-dialog-close>关闭</button>
-                    <button class="primary-button small" id="footnote-go" type="button">转到脚注</button>
+                    <button class="flat-button" type="button" data-dialog-close>Close</button>
+                    <button class="primary-button small" id="footnote-go" type="button">Go to Footnote</button>
                 </footer>
             </div>
         </dialog>
@@ -255,31 +255,31 @@
         <dialog id="lookup-dialog" class="content-dialog">
             <div class="dialog-card lookup-card">
                 <header>
-                    <h2 id="lookup-title">查询</h2>
-                    <button class="icon-button" type="button" data-dialog-close aria-label="关闭"><i data-lucide="x"></i></button>
+                    <h2 id="lookup-title">Lookup</h2>
+                    <button class="icon-button" type="button" data-dialog-close aria-label="Close"><i data-lucide="x"></i></button>
                 </header>
                 <main>
                     <form id="lookup-search-form" class="lookup-search">
-                        <input id="lookup-search-input" type="search" placeholder="搜索词条…" autocomplete="off">
-                        <button type="submit">搜索</button>
+                        <input id="lookup-search-input" type="search" placeholder="Search entry…" autocomplete="off">
+                        <button type="submit">Search</button>
                     </form>
                     <div id="lookup-content"></div>
                 </main>
                 <footer>
                     <span id="lookup-source"></span>
                     <label id="translation-language-row" hidden>
-                        翻译为
+                        Translate to
                         <select id="translation-language">
-                            <option value="zh-CN">简体中文</option>
+                            <option value="zh-CN">Chinese (Simplified)</option>
                             <option value="en">English</option>
-                            <option value="ja">日本語</option>
-                            <option value="ko">한국어</option>
-                            <option value="fr">Français</option>
-                            <option value="de">Deutsch</option>
-                            <option value="es">Español</option>
+                            <option value="ja">Japanese</option>
+                            <option value="ko">Korean</option>
+                            <option value="fr">French</option>
+                            <option value="de">German</option>
+                            <option value="es">Spanish</option>
                         </select>
                     </label>
-                    <button class="flat-button" type="button" data-dialog-close>关闭</button>
+                    <button class="flat-button" type="button" data-dialog-close>Close</button>
                 </footer>
             </div>
         </dialog>
@@ -287,179 +287,184 @@
         <dialog id="preferences-dialog" class="content-dialog">
             <form method="dialog" class="dialog-card preferences-card">
                 <header>
-                    <h2>设置</h2>
-                    <button class="icon-button" value="close" aria-label="关闭"><i data-lucide="x"></i></button>
+                    <h2>Settings</h2>
+                    <button class="icon-button" value="close" aria-label="Close"><i data-lucide="x"></i></button>
                 </header>
                 <main>
-                    <nav class="preferences-tabs" aria-label="设置分类">
-                        <button type="button" data-preferences-tab="interface" class="selected"><i data-lucide="settings-2"></i><span>界面设置</span></button>
-                        <button type="button" data-preferences-tab="reading"><i data-lucide="book-open"></i><span>电子书阅读</span></button>
-                        <button type="button" data-preferences-tab="pdf"><i data-lucide="file-text"></i><span>PDF 阅读</span></button>
-                        <button type="button" data-preferences-tab="selection"><i data-lucide="text-select"></i><span>划词工具</span></button>
-                        <button type="button" data-preferences-tab="system"><i data-lucide="monitor-cog"></i><span>系统集成</span></button>
+                    <nav class="preferences-tabs" aria-label="Settings categories">
+                        <button type="button" data-preferences-tab="interface" class="selected"><i data-lucide="settings-2"></i><span>Interface</span></button>
+                        <button type="button" data-preferences-tab="reading"><i data-lucide="book-open"></i><span>E-book Reading</span></button>
+                        <button type="button" data-preferences-tab="pdf"><i data-lucide="file-text"></i><span>PDF Reading</span></button>
+                        <button type="button" data-preferences-tab="selection"><i data-lucide="text-select"></i><span>Selection Tools</span></button>
+                        <button type="button" data-preferences-tab="system"><i data-lucide="monitor-cog"></i><span>System Integration</span></button>
                     </nav>
                     <div class="preferences-panels">
                         <section data-preferences-panel="interface">
                             <label class="preference-row">
-                                <span>界面外观</span>
+                                <span>Interface Appearance</span>
                                 <select id="theme-select">
-                                    <option value="system">跟随系统</option>
-                                    <option value="light">浅色</option>
-                                    <option value="dark">深色</option>
+                                    <option value="system">Follow System</option>
+                                    <option value="light">Light</option>
+                                    <option value="dark">Dark</option>
                                 </select>
                             </label>
-                            <h3>存储清理</h3>
+                            <h3>Storage Cleanup</h3>
                             <div class="cleanup-settings">
-                                <button id="cleanup-retained-data" type="button">清理已移除图书的阅读数据</button>
-                                <button id="cleanup-temporary-files" type="button">清理临时文件</button>
+                                <button id="cleanup-retained-data" type="button">Clear Retained Reading Data</button>
+                                <button id="cleanup-temporary-files" type="button">Clear Temporary Files</button>
                             </div>
-                            <p class="preference-note" id="cleanup-status">清理操作不会删除仍在书库中的阅读进度、批注或书签，也不会删除原始图书文件。</p>
+                            <p class="preference-note" id="cleanup-status">Cleanup does not delete data for books still in the library or original book files.</p>
                             <label class="preference-row">
-                                <span>界面语言</span>
+                                <span>Change Language</span>
                                 <select id="language-select">
-                                    <option value="zh-CN">简体中文</option>
                                     <option value="en">English</option>
+                                    <option value="zh-CN">Chinese (简体中文)</option>
                                 </select>
                             </label>
-                            <h3>书库行为</h3>
+                            <h3>Library Behavior</h3>
                             <label class="preference-row">
-                                <span>打开图书时</span>
+                                <span>When Opening a Book</span>
                                 <select id="library-open-mode-select">
-                                    <option value="auto-import">打开并自动导入书库</option>
-                                    <option value="manual">仅打开，按需手动导入</option>
+                                    <option value="auto-import">Open and Import Automatically</option>
+                                    <option value="manual">Open Only; Import Manually</option>
                                 </select>
                             </label>
-                            <p class="preference-note">自动导入模式保留一个书库入口；手动模式会同时显示“打开”和“导入”两个入口。</p>
+                            <label class="preference-row switch-row">
+                                <span>Copy Books to Library Folder</span>
+                                <input id="copy-to-library-input" type="checkbox">
+                            </label>
+                            <p class="preference-note">When on, a managed copy of each imported book lives in the Foliate library folder so the book stays openable after the original file is moved or deleted. Default is on.</p>
                         </section>
                         <section data-preferences-panel="reading" hidden>
-                            <h3>字体与主题</h3>
+                            <h3>Font and Theme</h3>
                             <label class="preference-row">
-                                <span>阅读主题</span>
+                                <span>Reading Theme</span>
                                 <select id="book-theme-select">
-                                    <option value="default">默认</option>
-                                    <option value="gray">灰色</option>
-                                    <option value="sepia">羊皮纸</option>
-                                    <option value="grass">草绿</option>
-                                    <option value="cherry">樱桃</option>
-                                    <option value="sky">天空</option>
+                                    <option value="default">Default</option>
+                                    <option value="gray">Gray</option>
+                                    <option value="sepia">Sepia</option>
+                                    <option value="grass">Grass</option>
+                                    <option value="cherry">Cherry</option>
+                                    <option value="sky">Sky</option>
                                     <option value="solarized">Solarized</option>
                                     <option value="gruvbox">Gruvbox</option>
                                     <option value="nord">Nord</option>
                                 </select>
                             </label>
                             <label class="preference-row range-row">
-                                <span>默认字号 <output id="font-size-output"></output></span>
+                                <span>Default Font Size <output id="font-size-output"></output></span>
                                 <input id="font-size-input" type="range" min="10" max="32" step="1">
                             </label>
                             <label class="preference-row range-row">
-                                <span>最小字号 <output id="minimum-font-size-output"></output></span>
+                                <span>Minimum Font Size <output id="minimum-font-size-output"></output></span>
                                 <input id="minimum-font-size-input" type="range" min="0" max="24" step="1">
                             </label>
                             <label class="preference-row">
-                                <span>默认字体</span>
+                                <span>Default Font</span>
                                 <select id="default-font-select">
-                                    <option value="serif">衬线体</option>
-                                    <option value="sans-serif">无衬线体</option>
+                                    <option value="serif">Serif</option>
+                                    <option value="sans-serif">Sans-serif</option>
                                 </select>
                             </label>
                             <label class="preference-row switch-row">
-                                <span>覆盖出版商字体</span>
+                                <span>Override Publisher Font</span>
                                 <input id="override-font-input" type="checkbox">
                             </label>
                             <label class="preference-row">
-                                <span>衬线字体</span>
+                                <span>Serif Font</span>
                                 <input id="serif-font-input" type="text" list="system-fonts" spellcheck="false" autocomplete="off">
                             </label>
                             <label class="preference-row">
-                                <span>无衬线字体</span>
+                                <span>Sans-serif Font</span>
                                 <input id="sans-font-input" type="text" list="system-fonts" spellcheck="false" autocomplete="off">
                             </label>
                             <label class="preference-row">
-                                <span>等宽字体</span>
+                                <span>Monospace Font</span>
                                 <input id="monospace-font-input" type="text" list="system-fonts" spellcheck="false" autocomplete="off">
                             </label>
-                            <p class="preference-note" id="font-list-status">打开设置时读取 Windows 字体列表；选择字体会自动启用“覆盖出版商字体”。</p>
-                            <h3>布局</h3>
+                            <p class="preference-note" id="font-list-status">Windows font list loaded when preferences open; selecting a font automatically enables "Override Publisher Font".</p>
+                            <h3>Layout</h3>
                             <label class="preference-row">
-                                <span>布局</span>
+                                <span>Layout</span>
                                 <select id="flow-select">
-                                    <option value="paginated">分页</option>
-                                    <option value="scrolled">滚动</option>
+                                    <option value="paginated">Paginated</option>
+                                    <option value="scrolled">Scrolled</option>
                                 </select>
                             </label>
                             <label class="preference-row range-row">
-                                <span>行距 <output id="line-height-output"></output></span>
+                                <span>Line Height <output id="line-height-output"></output></span>
                                 <input id="line-height-input" type="range" min="1" max="3" step="0.05">
                             </label>
-                            <label class="preference-row switch-row"><span>两端对齐</span><input id="justify-input" type="checkbox"></label>
-                            <label class="preference-row switch-row"><span>自动断词</span><input id="hyphenate-input" type="checkbox"></label>
+                            <label class="preference-row switch-row"><span>Justify</span><input id="justify-input" type="checkbox"></label>
+                            <label class="preference-row switch-row"><span>Hyphenation</span><input id="hyphenate-input" type="checkbox"></label>
                             <label class="preference-row range-row">
-                                <span>页边距 <output id="page-margin-output"></output></span>
+                                <span>Page Margin <output id="page-margin-output"></output></span>
                                 <input id="page-margin-input" type="range" min="0" max="100" step="2">
                             </label>
                             <label class="preference-row range-row">
-                                <span>最大行宽 <output id="page-width-output"></output></span>
+                                <span>Maximum Inline Size <output id="page-width-output"></output></span>
                                 <input id="page-width-input" type="range" min="300" max="1600" step="20">
                             </label>
                             <label class="preference-row range-row">
-                                <span>最大页面高度 <output id="page-height-output"></output></span>
+                                <span>Maximum Block Size <output id="page-height-output"></output></span>
                                 <input id="page-height-input" type="range" min="400" max="2400" step="40">
                             </label>
                             <label class="preference-row range-row">
-                                <span>最大列数 <output id="max-columns-output"></output></span>
+                                <span>Maximum Columns <output id="max-columns-output"></output></span>
                                 <input id="max-columns-input" type="range" min="1" max="4" step="1">
                             </label>
-                            <h3>行为</h3>
-                            <label class="preference-row switch-row"><span>减少翻页动画</span><input id="reduce-animation-input" type="checkbox"></label>
-                            <label class="preference-row switch-row"><span>暗色模式反色</span><input id="invert-dark-input" type="checkbox"></label>
-                            <label class="preference-row switch-row"><span>阅读时自动隐藏光标</span><input id="autohide-cursor-input" type="checkbox"></label>
+                            <h3>Behavior</h3>
+                            <label class="preference-row switch-row"><span>Reduce Animation</span><input id="reduce-animation-input" type="checkbox"></label>
+                            <label class="preference-row switch-row"><span>White Background</span><input id="white-bg-input" type="checkbox"></label>
+                            <label class="preference-row switch-row"><span>Invert in Dark Mode</span><input id="invert-dark-input" type="checkbox"></label>
+                            <label class="preference-row switch-row"><span>Autohide Cursor</span><input id="autohide-cursor-input" type="checkbox"></label>
                         </section>
                         <section data-preferences-panel="pdf" hidden>
                             <label class="preference-row">
-                                <span>页面缩放</span>
+                                <span>Page Zoom</span>
                                 <select id="pdf-zoom-select">
-                                    <option value="fit-page">适合页面</option>
-                                    <option value="fit-width">适合宽度</option>
+                                    <option value="fit-page">Fit Page</option>
+                                    <option value="fit-width">Fit Width</option>
                                     <option value="1">100%</option>
                                     <option value="1.25">125%</option>
                                     <option value="1.5">150%</option>
                                     <option value="2">200%</option>
                                 </select>
                             </label>
-                            <label class="preference-row switch-row"><span>鼠标滚轮翻页</span><input id="pdf-wheel-input" type="checkbox"></label>
-                            <label class="preference-row switch-row"><span>暗色模式反色</span><input id="pdf-invert-dark-input" type="checkbox"></label>
-                            <p class="preference-note">PDF 是固定版式，字号、字体、行距和分栏等电子书排版设置不会应用到 PDF。</p>
+                            <label class="preference-row switch-row"><span>Turn Pages with Mouse Wheel</span><input id="pdf-wheel-input" type="checkbox"></label>
+                            <label class="preference-row switch-row"><span>Invert in Dark Mode</span><input id="pdf-invert-dark-input" type="checkbox"></label>
+                            <p class="preference-note">PDF is fixed-layout; font, font size, line height, and column settings do not apply to PDF.</p>
                         </section>
                         <section data-preferences-panel="selection" hidden>
-                            <label class="preference-row switch-row"><span>显示划词工具条</span><input id="selection-toolbar-input" type="checkbox"></label>
-                            <h3>工具</h3>
+                            <label class="preference-row switch-row"><span>Show Selection Toolbar</span><input id="selection-toolbar-input" type="checkbox"></label>
+                            <h3>Tools</h3>
                             <div class="selection-tool-settings">
-                                <label><input type="checkbox" data-selection-tool="copy">复制</label>
-                                <label><input type="checkbox" data-selection-tool="copy-citation">引用</label>
-                                <label><input type="checkbox" data-selection-tool="copy-cfi">书签</label>
-                                <label><input type="checkbox" data-selection-tool="find">书内查找</label>
-                                <label><input type="checkbox" data-selection-tool="speak">朗读</label>
-                                <label><input type="checkbox" data-selection-tool="highlight">高亮</label>
-                                <label><input type="checkbox" data-selection-tool="dictionary">词典</label>
+                                <label><input type="checkbox" data-selection-tool="copy">Copy</label>
+                                <label><input type="checkbox" data-selection-tool="copy-citation">Citation</label>
+                                <label><input type="checkbox" data-selection-tool="copy-cfi">Bookmark</label>
+                                <label><input type="checkbox" data-selection-tool="find">Find</label>
+                                <label><input type="checkbox" data-selection-tool="speak">Speak</label>
+                                <label><input type="checkbox" data-selection-tool="highlight">Highlight</label>
+                                <label><input type="checkbox" data-selection-tool="dictionary">Dictionary</label>
                                 <label><input type="checkbox" data-selection-tool="wikipedia">Wikipedia</label>
-                                <label><input type="checkbox" data-selection-tool="translate">翻译</label>
-                                <label><input type="checkbox" data-selection-tool="print">打印</label>
+                                <label><input type="checkbox" data-selection-tool="translate">Translate</label>
+                                <label><input type="checkbox" data-selection-tool="print">Print</label>
                             </div>
-                            <p class="preference-note">此处“书签”用于复制 EPUB CFI 精确位置标识，不会直接添加到书签列表。PDF 不提供 CFI。</p>
+                            <p class="preference-note">"Bookmark" here copies the EPUB CFI location identifier and does not add to the bookmark list. PDF does not provide CFI.</p>
                         </section>
                         <section data-preferences-panel="system" hidden>
-                            <h3>文件关联</h3>
-                            <p class="preference-note">将 Foliate 设为当前用户支持格式的可选打开程序。此操作不会覆盖系统级设置。</p>
+                            <h3>File Associations</h3>
+                            <p class="preference-note">Register Foliate as an optional opener for supported file types for the current user. This does not override system-level settings.</p>
                             <div class="system-integration-actions">
-                                <button id="associate-files" type="button">关联支持的文件类型</button>
-                                <button id="unassociate-files" type="button">取消文件关联</button>
+                                <button id="associate-files" type="button">Associate Supported File Types</button>
+                                <button id="unassociate-files" type="button">Remove File Associations</button>
                             </div>
-                            <h3>桌面快捷方式</h3>
+                            <h3>Desktop Shortcut</h3>
                             <div class="system-integration-actions">
-                                <button id="create-desktop-shortcut" type="button">发送桌面快捷方式</button>
-                                <button id="remove-desktop-shortcut" type="button">移除桌面快捷方式</button>
+                                <button id="create-desktop-shortcut" type="button">Create Desktop Shortcut</button>
+                                <button id="remove-desktop-shortcut" type="button">Remove Desktop Shortcut</button>
                             </div>
-                            <p class="preference-note" id="system-integration-status">正在读取当前状态…</p>
+                            <p class="preference-note" id="system-integration-status">Reading current status…</p>
                         </section>
                     </div>
                 </main>
@@ -470,39 +475,39 @@
         <dialog id="location-dialog" class="content-dialog">
             <div class="dialog-card location-card">
                 <header>
-                    <h2>当前位置</h2>
-                    <button class="icon-button" type="button" data-dialog-close aria-label="关闭"><i data-lucide="x"></i></button>
+                    <h2>Current Location</h2>
+                    <button class="icon-button" type="button" data-dialog-close aria-label="Close"><i data-lucide="x"></i></button>
                 </header>
                 <main>
                     <div class="time-summary">
-                        <div><span>本章节剩余</span><strong id="time-section">—</strong></div>
-                        <div><span>全书剩余</span><strong id="time-book">—</strong></div>
+                        <div><span>Section Remaining</span><strong id="time-section">—</strong></div>
+                        <div><span>Book Remaining</span><strong id="time-book">—</strong></div>
                     </div>
                     <label class="location-row" id="page-location-row">
-                        <span>出版物页码</span>
+                        <span>Publication Page</span>
                         <select id="page-list-select"></select>
                     </label>
                     <label class="location-row">
-                        <span>位置</span>
-                        <span class="linked-input"><input id="location-input" type="number" min="1"><span id="location-total">/ —</span><button id="location-go" type="button">转到</button></span>
+                        <span>Location</span>
+                        <span class="linked-input"><input id="location-input" type="number" min="1"><span id="location-total">/ —</span><button id="location-go" type="button">Go</button></span>
                     </label>
                     <label class="location-row">
-                        <span>章节</span>
-                        <span class="linked-input"><input id="section-input" type="number" min="1"><span id="section-total">/ —</span><button id="section-go" type="button">转到</button></span>
+                        <span>Section</span>
+                        <span class="linked-input"><input id="section-input" type="number" min="1"><span id="section-total">/ —</span><button id="section-go" type="button">Go</button></span>
                     </label>
                     <label class="location-row" id="cfi-location-row">
-                        <span>EPUB 位置标识（CFI）</span>
-                        <span class="linked-input cfi-input"><input id="cfi-input" type="text" spellcheck="false"><button id="cfi-copy" type="button">复制</button><button id="cfi-paste" type="button">粘贴</button><button id="cfi-go" type="button">转到</button></span>
+                        <span>EPUB CFI</span>
+                        <span class="linked-input cfi-input"><input id="cfi-input" type="text" spellcheck="false"><button id="cfi-copy" type="button">Copy</button><button id="cfi-paste" type="button">Paste</button><button id="cfi-go" type="button">Go</button></span>
                     </label>
                     <label class="location-row" id="landmarks-row">
-                        <span>跳转到</span>
+                        <span>Jump to</span>
                         <select id="landmarks-select"></select>
                     </label>
                     <div class="section-navigation">
-                        <button id="first-section" type="button">第一章</button>
-                        <button id="previous-section" type="button">上一章</button>
-                        <button id="next-section" type="button">下一章</button>
-                        <button id="last-section" type="button">最后一章</button>
+                        <button id="first-section" type="button">First</button>
+                        <button id="previous-section" type="button">Previous</button>
+                        <button id="next-section" type="button">Next</button>
+                        <button id="last-section" type="button">Last</button>
                     </div>
                 </main>
             </div>
@@ -511,8 +516,8 @@
         <dialog id="book-info-dialog" class="content-dialog">
             <div class="dialog-card info-card">
                 <header>
-                    <h2>图书信息</h2>
-                    <button class="icon-button" type="button" data-dialog-close aria-label="关闭"><i data-lucide="x"></i></button>
+                    <h2>Book Information</h2>
+                    <button class="icon-button" type="button" data-dialog-close aria-label="Close"><i data-lucide="x"></i></button>
                 </header>
                 <main id="book-info-content"></main>
             </div>
@@ -521,28 +526,28 @@
         <dialog id="reader-menu-dialog" class="content-dialog">
             <div class="dialog-card menu-card">
                 <header>
-                    <h2>阅读器菜单</h2>
-                    <button class="icon-button" type="button" data-dialog-close aria-label="关闭"><i data-lucide="x"></i></button>
+                    <h2>Reader Menu</h2>
+                    <button class="icon-button" type="button" data-dialog-close aria-label="Close"><i data-lucide="x"></i></button>
                 </header>
                 <main class="command-grid">
-                    <button id="reader-preferences" type="button"><i data-lucide="settings-2"></i>阅读设置</button>
-                    <button id="reload-book" type="button"><i data-lucide="refresh-cw"></i>重新加载</button>
-                    <button id="new-window-book" type="button"><i data-lucide="copy-plus"></i>在新窗口打开</button>
-                    <button id="fullscreen-button" type="button"><i data-lucide="maximize-2"></i>全屏</button>
-                    <button id="print-book" type="button"><i data-lucide="printer"></i>打印整本书</button>
-                    <button id="import-annotations" type="button"><i data-lucide="download"></i>导入批注</button>
-                    <button id="export-annotations" type="button"><i data-lucide="upload"></i>导出批注</button>
-                    <button id="shortcuts-button" type="button"><i data-lucide="keyboard"></i>键盘快捷键</button>
-                    <button id="reader-about-button" type="button"><i data-lucide="info"></i>关于</button>
+                    <button id="reader-preferences" type="button"><i data-lucide="settings-2"></i>Reading Settings</button>
+                    <button id="reload-book" type="button"><i data-lucide="refresh-cw"></i>Reload</button>
+                    <button id="new-window-book" type="button"><i data-lucide="copy-plus"></i>Open in New Window</button>
+                    <button id="fullscreen-button" type="button"><i data-lucide="maximize-2"></i>Fullscreen</button>
+                    <button id="print-book" type="button"><i data-lucide="printer"></i>Print Book</button>
+                    <button id="import-annotations" type="button"><i data-lucide="download"></i>Import Annotations</button>
+                    <button id="export-annotations" type="button"><i data-lucide="upload"></i>Export Annotations</button>
+                    <button id="shortcuts-button" type="button"><i data-lucide="keyboard"></i>Keyboard Shortcuts</button>
+                    <button id="reader-about-button" type="button"><i data-lucide="info"></i>About</button>
                 </main>
             </div>
         </dialog>
 
         <dialog id="annotation-export-dialog" class="content-dialog">
             <form method="dialog" class="dialog-card compact-card">
-                <header><h2>导出批注</h2><button class="icon-button" value="close" aria-label="关闭"><i data-lucide="x"></i></button></header>
+                <header><h2>Export Annotations</h2><button class="icon-button" value="close" aria-label="Close"><i data-lucide="x"></i></button></header>
                 <main>
-                    <label class="preference-row"><span>格式</span>
+                    <label class="preference-row"><span>Format</span>
                         <select id="annotation-export-format">
                             <option value="json">Foliate JSON</option>
                             <option value="html">HTML</option>
@@ -551,61 +556,62 @@
                         </select>
                     </label>
                 </main>
-                <footer><button class="flat-button" value="close">取消</button><button id="annotation-export-confirm" class="primary-button small" type="button">导出</button></footer>
+                <footer><button class="flat-button" value="close">Cancel</button><button id="annotation-export-confirm" class="primary-button small" type="button">Export</button></footer>
             </form>
         </dialog>
 
         <dialog id="error-dialog" class="content-dialog">
             <div class="dialog-card error-card">
-                <header><h2 id="error-title">无法打开图书</h2><button class="icon-button" type="button" data-dialog-close aria-label="关闭"><i data-lucide="x"></i></button></header>
-                <main><p id="error-message"></p><details><summary>错误详情</summary><pre id="error-details"></pre></details></main>
-                <footer><button class="flat-button" type="button" data-dialog-close>关闭</button><button id="error-retry" class="primary-button small" type="button">重试</button></footer>
+                <header><h2 id="error-title">Unable to Open Book</h2><button class="icon-button" type="button" data-dialog-close aria-label="Close"><i data-lucide="x"></i></button></header>
+                <main><p id="error-message"></p><details><summary>Error Details</summary><pre id="error-details"></pre></details></main>
+                <footer><button class="flat-button" type="button" data-dialog-close>Close</button><button id="error-retry" class="primary-button small" type="button">Retry</button></footer>
             </div>
         </dialog>
 
         <dialog id="shortcuts-dialog" class="content-dialog">
             <div class="dialog-card shortcuts-card">
-                <header><h2>键盘快捷键</h2><button class="icon-button" type="button" data-dialog-close aria-label="关闭"><i data-lucide="x"></i></button></header>
+                <header><h2>Keyboard Shortcuts</h2><button class="icon-button" type="button" data-dialog-close aria-label="Close"><i data-lucide="x"></i></button></header>
                 <main id="shortcuts-content"></main>
             </div>
         </dialog>
 
         <dialog id="about-dialog" class="content-dialog">
             <div class="dialog-card about-card">
-                <header><h2>关于 Foliate for Windows</h2><button class="icon-button" type="button" data-dialog-close aria-label="关闭"><i data-lucide="x"></i></button></header>
+                <header><h2>About Foliate for Windows</h2><button class="icon-button" type="button" data-dialog-close aria-label="Close"><i data-lucide="x"></i></button></header>
                 <main>
                     <img src="/assets/foliate.svg" alt="" width="84" height="84">
-                    <h3>Foliate for Windows <span id="about-version">0.1.3</span></h3>
-                    <p>基于 Foliate、foliate-js、Tauri、WebView2 和 PDF.js 的轻量电子书阅读器。</p>
-                    <details><summary>许可证与依赖</summary><pre>Foliate for Windows — GPL-3.0-or-later
+                    <h3>Foliate for Windows <span id="about-version">0.1.5</span></h3>
+                    <p>A lightweight e-book reader built on Foliate, foliate-js, Tauri, WebView2, and PDF.js.</p>
+                    <p class="about-disclosure">All contributions by vihaanvp to this project were made using OpenCode.</p>
+                    <details><summary>Licenses and Dependencies</summary><pre>Foliate for Windows — GPL-3.0-or-later
 Foliate — GPL-3.0-or-later
 foliate-js — MIT
 Tauri — Apache-2.0 / MIT
 PDF.js — Apache-2.0
 Lucide — ISC</pre></details>
-                    <details><summary>调试信息</summary><pre id="debug-info"></pre></details>
+                    <details><summary>Debug Information</summary><pre id="debug-info"></pre></details>
                 </main>
             </div>
         </dialog>
 
         <dialog id="image-viewer-dialog" class="image-viewer-dialog">
             <div class="image-viewer-toolbar">
-                <button id="image-zoom-out" type="button" title="缩小"><i data-lucide="zoom-out"></i></button>
-                <button id="image-reset" type="button" title="恢复比例">100%</button>
-                <button id="image-zoom-in" type="button" title="放大"><i data-lucide="zoom-in"></i></button>
-                <button id="image-rotate-left" type="button" title="向左旋转"><i data-lucide="rotate-ccw"></i></button>
-                <button id="image-rotate-right" type="button" title="向右旋转"><i data-lucide="rotate-cw"></i></button>
-                <button id="image-invert" type="button" title="反相"><i data-lucide="contrast"></i></button>
-                <button id="image-copy" type="button" title="复制"><i data-lucide="copy"></i></button>
-                <button id="image-save" type="button" title="另存为"><i data-lucide="download"></i></button>
-                <button id="image-close" type="button" title="关闭"><i data-lucide="x"></i></button>
+                <button id="image-zoom-out" type="button" title="Zoom Out"><i data-lucide="zoom-out"></i></button>
+                <button id="image-reset" type="button" title="Reset Zoom">100%</button>
+                <button id="image-zoom-in" type="button" title="Zoom In"><i data-lucide="zoom-in"></i></button>
+                <button id="image-rotate-left" type="button" title="Rotate Left"><i data-lucide="rotate-ccw"></i></button>
+                <button id="image-rotate-right" type="button" title="Rotate Right"><i data-lucide="rotate-cw"></i></button>
+                <button id="image-invert" type="button" title="Invert"><i data-lucide="contrast"></i></button>
+                <button id="image-copy" type="button" title="Copy"><i data-lucide="copy"></i></button>
+                <button id="image-save" type="button" title="Save As"><i data-lucide="download"></i></button>
+                <button id="image-close" type="button" title="Close"><i data-lucide="x"></i></button>
             </div>
-            <div id="image-viewer-stage"><img id="image-viewer-image" alt="图书插图"></div>
+            <div id="image-viewer-stage"><img id="image-viewer-image" alt="Book illustration"></div>
         </dialog>
 
         <div id="loading" class="loading" role="status" hidden>
             <span class="spinner" aria-hidden="true"></span>
-            <span>正在打开…</span>
+            <span>Opening…</span>
         </div>
         <div id="toast" class="toast" role="alert" hidden><span id="toast-message"></span><button id="toast-action" type="button" hidden></button></div>
         <input id="file-input" type="file" accept=".epub,.mobi,.azw,.azw3,.fb2,.fb2.zip,.fbz,.cbz,.pdf" hidden>

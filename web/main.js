@@ -72,15 +72,15 @@ const mimeTypes = {
     pdf: 'application/pdf',
 }
 const invoke = globalThis.__TAURI__?.core?.invoke
-const percentFormat = new Intl.NumberFormat('zh-CN', {
+const percentFormat = new Intl.NumberFormat('en', {
     style: 'percent',
     maximumFractionDigits: 0,
 })
-const listFormat = new Intl.ListFormat('zh-CN', {
+const listFormat = new Intl.ListFormat('en', {
     style: 'short',
     type: 'conjunction',
 })
-const dateFormat = new Intl.DateTimeFormat('zh-CN', {
+const dateFormat = new Intl.DateTimeFormat('en', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -233,10 +233,10 @@ const selectionToolEnabled = Object.fromEntries(selectionTools.map(action => [
 const formatDuration = seconds => {
     if (!Number.isFinite(seconds) || seconds < 0) return '—'
     const minutes = Math.max(1, Math.round(seconds / 60))
-    if (minutes < 60) return `${minutes} 分钟`
+    if (minutes < 60) return `${minutes} min`
     const hours = Math.floor(minutes / 60)
     const rest = minutes % 60
-    return rest ? `${hours} 小时 ${rest} 分钟` : `${hours} 小时`
+    return rest ? `${hours} hr ${rest} min` : `${hours} hr`
 }
 const flattenNavigation = (items, depth = 0) => (items ?? []).flatMap(item => [
     { ...item, depth },
@@ -298,9 +298,10 @@ const nativeBookFromInfo = info =>
 const readerCSS = settings => {
     const theme = currentTheme()
     const palette = bookThemes[settings.bookTheme] ?? bookThemes.default
-    const inverted = theme === 'dark' && settings.invertDark
-    const colors = inverted ? palette.light
-        : theme === 'dark' ? palette.dark : palette.light
+    // whiteBG takes precedence: ON (default) = light palette = white bg,
+    // dark text (book-like). OFF = dark palette = dark bg, light text
+    // (= "inverted"). Replaces the UI-theme-dependent invertDark flag.
+    const colors = settings.whiteBG === false ? palette.dark : palette.light
     const defaultFamily = settings.defaultFont === 'sans-serif'
         ? settings.sansFont
         : settings.serifFont
@@ -424,6 +425,7 @@ class Reader {
     maxColumns = storedNumber('reader-max-columns', 2)
     reduceAnimation = storedBoolean('reader-reduce-animation', false)
     invertDark = storedBoolean('reader-invert-dark', false)
+    whiteBG = storedBoolean('reader-white-bg', true)
     autohideCursor = storedBoolean('reader-autohide-cursor', false)
     pdfZoom = localStorage.getItem('pdf-zoom') || 'fit-page'
     pdfWheel = storedBoolean('pdf-wheel', true)
@@ -577,11 +579,11 @@ class Reader {
         this.footnoteHandler.addEventListener('render', event => {
             const { href, hidden, type } = event.detail
             const labels = {
-                footnote: ['脚注', '转到脚注'],
-                endnote: ['尾注', '转到尾注'],
-                note: ['注释', '转到注释'],
-                definition: ['释义', '转到释义'],
-                biblioentry: ['参考文献', '转到参考文献'],
+                footnote: ['Footnote', 'Go to Footnote'],
+                endnote: ['Endnote', 'Go to Endnote'],
+                note: ['Note', 'Go to Note'],
+                definition: ['Definition', 'Go to Definition'],
+                biblioentry: ['Bibliography', 'Go to Bibliography'],
             }
             const [title, action] = labels[type] ?? labels.footnote
             this.footnoteHref = href
@@ -599,7 +601,7 @@ class Reader {
             const image = event.target.closest?.('img, svg')
             if (image) openImageViewer(image).catch(error => {
                 console.error(error)
-                showToast('无法打开这张插图')
+                showToast('Cannot open this illustration')
             })
         })
         doc.addEventListener('pointerup', () => {
@@ -635,7 +637,9 @@ class Reader {
         }
         await this.cancelSearch()
         if (!this.view) return
-        this.view.close()
+        // ponytail: view.close() assumes a paginator exists; a half-opened
+        // view (open() threw) has none and would mask the real parse error.
+        try { this.view.close() } catch {}
         await this.view.book?.destroy?.()
         this.view.remove()
         this.view = null
@@ -674,7 +678,7 @@ class Reader {
         if (cover) {
             this.coverURL = URL.createObjectURL(cover)
             $('#book-cover').src = this.coverURL
-            $('#book-cover').alt = `${title} 封面`
+            $('#book-cover').alt = `${title} cover`
             $('#book-cover').hidden = false
         } else {
             $('#book-cover').hidden = true
@@ -689,7 +693,7 @@ class Reader {
         } else {
             const empty = document.createElement('div')
             empty.className = 'panel-empty'
-            empty.textContent = '无目录'
+            empty.textContent = 'No table of contents'
             $('#toc').replaceChildren(empty)
         }
         renderBookInfo(metadata, file)
@@ -710,7 +714,7 @@ class Reader {
             const option = document.createElement('option')
             option.value = item.href
             option.dataset.id = String(item.id ?? '')
-            option.textContent = `${'\u00a0\u00a0'.repeat(item.depth)}${item.label || '未命名页'}`
+            option.textContent = `${'\u00a0\u00a0'.repeat(item.depth)}${item.label || 'Untitled page'}`
             return option
         }))
         $('#page-location-row').hidden = pageItems.length === 0
@@ -719,11 +723,11 @@ class Reader {
         const landmarkSelect = $('#landmarks-select')
         const placeholder = document.createElement('option')
         placeholder.value = ''
-        placeholder.textContent = '选择位置…'
+        placeholder.textContent = 'Select location…'
         landmarkSelect.replaceChildren(placeholder, ...landmarks.map(item => {
             const option = document.createElement('option')
             option.value = item.href
-            option.textContent = `${'\u00a0\u00a0'.repeat(item.depth)}${item.label || item.type || '未命名位置'}`
+            option.textContent = `${'\u00a0\u00a0'.repeat(item.depth)}${item.label || item.type || 'Untitled location'}`
             return option
         }))
         $('#landmarks-row').hidden = landmarks.length === 0
@@ -862,7 +866,7 @@ class Reader {
         $('#search-next').disabled = true
         query = query.trim()
         if (!query || !this.view) {
-            $('#search-status').textContent = '输入关键词开始搜索'
+            $('#search-status').textContent = 'Type to search'
             return
         }
 
@@ -870,7 +874,7 @@ class Reader {
         const progress = document.createElement('progress')
         progress.max = 1
         progress.value = 0
-        $('#search-status').replaceChildren('正在搜索…', progress)
+        $('#search-status').replaceChildren('Searching…', progress)
         const options = {
             query,
             matchCase: $('#search-match-case').checked,
@@ -906,15 +910,15 @@ class Reader {
             if (token !== this.searchToken) return
             this.searchIterator = null
             $('#search-status').textContent = this.searchResults.length
-                ? `找到 ${this.searchResults.length} 个结果`
-                : '没有找到结果'
+                ? `Found ${this.searchResults.length} result${this.searchResults.length > 1 ? 's' : ''}`
+                : 'No results found'
             const hasResults = this.searchResults.length > 0
             $('#search-previous').disabled = !hasResults
             $('#search-next').disabled = !hasResults
         } catch (error) {
             if (token !== this.searchToken) return
             console.error(error)
-            $('#search-status').textContent = '搜索失败'
+            $('#search-status').textContent = 'Search failed'
         }
     }
 
@@ -972,7 +976,7 @@ class Reader {
 
     async addAnnotation(selection, color = '#f6d32d') {
         if (this.view.isFixedLayout) {
-            showToast('固定版式和 PDF 暂不支持高亮批注')
+            showToast(                'Fixed layout and PDF do not support highlight annotations yet')
             return null
         }
         const value = this.view.getCFI(selection.index, selection.range)
@@ -1038,7 +1042,7 @@ class Reader {
         const children = []
         let currentLabel
         for (const annotation of annotations) {
-            const groupLabel = annotation.label || '未命名章节'
+            const groupLabel = annotation.label || 'Untitled chapter'
             if (groupLabel !== currentLabel) {
                 const heading = document.createElement('h3')
                 heading.className = 'annotation-group-heading'
@@ -1108,7 +1112,7 @@ class Reader {
         const icon = document.createElement('i')
         icon.dataset.lucide = active ? 'bookmark-check' : 'bookmark'
         button.append(icon)
-        button.title = active ? '删除书签' : '添加书签'
+        button.title = active ? 'Remove Bookmark' : 'Add Bookmark'
         button.setAttribute('aria-label', button.title)
         createIcons({ icons, root: button })
     }
@@ -1168,6 +1172,30 @@ let libraryListView = localStorage.getItem('library-view') === 'list'
 let libraryOpenMode = localStorage.getItem('library-open-mode') === 'manual'
     ? 'manual'
     : 'auto-import'
+// Copy-Books-to-Library: opt-out (default on). When true, every book picked
+// through the system file picker, or opened via file association on launch,
+// is copied into Foliate's managed library folder before being imported or
+// read, so the library entry survives the original file being moved or
+// deleted. The managed folder is `Data/books/` (portable) or
+// `%LOCALAPPDATA%\Foliate\books\` (installed), handled by the Rust
+// `import_book_to_library` command.
+let copyToLibrary = localStorage.getItem('copy-to-library') !== 'false'
+
+// Returns a BookPathInfo pointing at the managed copy when the feature is on,
+// or the original info unchanged when off. Failure to copy falls back to the
+// original path so the book still tries to open.
+const syncManagedBook = async info => {
+    if (!invoke || !copyToLibrary || !info?.path) return info
+    try {
+        return await invoke('import_book_to_library', { srcPath: info.path })
+    } catch (error) {
+        console.error('Cannot copy book to library folder:', error)
+        const label = info?.name ?? info.path
+        showToast(`Cannot copy "${label}" to library folder: ${error?.message || String(error)}. Opening from original location.`)
+        return info
+    }
+}
+
 let sidebarPinned = storedBoolean('sidebar-pinned', true)
 let selectionContext = null
 let currentAnnotation = null
@@ -1222,7 +1250,10 @@ const inspectBook = async file => {
             : await Promise.resolve(view.book.getCover?.()).catch(() => null)
         return { metadata, title, author, description, cover }
     } finally {
-        view.close?.()
+        // ponytail: view.close() assumes a paginator exists; when open()
+        // threw before creating one, calling close() would mask the real
+        // parse error with a TypeError about undefined.paginator.destroy.
+        try { view.close?.() } catch {}
         await view.book?.destroy?.()
         view.remove()
     }
@@ -1233,7 +1264,7 @@ const importBooks = async files => {
         supportedExtensions.includes(getExtension(file.name)))
     if (!books.length) return
     if (invoke && books.some(file => !file.sourcePath)) {
-        showToast('安装版无法从网页拖放取得文件路径，请使用“导入图书”按钮')
+        showToast('Cannot get file path from drag-and-drop in installed mode; use the “Import Books” button')
         return
     }
     $('#loading').hidden = false
@@ -1241,19 +1272,19 @@ const importBooks = async files => {
     try {
         let imported = 0
         for (const [index, file] of books.entries()) {
-            status.textContent = `正在导入 ${index + 1}/${books.length}：${file.name}`
+            status.textContent = `Importing ${index + 1}/${books.length}: ${file.name}`
             try {
                 await library.import(file, inspectBook)
                 imported++
             } catch (error) {
                 console.error(error)
-                showToast(`无法导入 ${file.name}`)
+                showToast(`Cannot import ${file.name}`)
             }
         }
         await renderLibrary()
-        if (imported) showToast(`已导入 ${imported} 本图书`)
+        if (imported) showToast(`Imported ${imported} book${imported > 1 ? 's' : ''}`)
     } finally {
-        status.textContent = '正在打开…'
+        status.textContent = 'Opening…'
         $('#loading').hidden = true
         $('#import-input').value = ''
     }
@@ -1274,17 +1305,17 @@ const openPickedFile = async (file, storageIdentity = null) => {
     if (libraryOpenMode === 'manual') return openFile(file, storageIdentity)
     $('#loading').hidden = false
     const status = $('#loading span:last-child')
-    status.textContent = `正在导入：${file.name}`
+    status.textContent = `Importing: ${file.name}`
     try {
         const record = await library.import(file, inspectBook)
         await renderLibrary()
         await openLibraryRecord(record)
-        showToast('已自动导入书库')
+        showToast('Auto-imported to library')
     } catch (error) {
         console.error(error)
-        showOpenError('无法打开图书', `无法解析或导入 “${file.name}”。`, error)
+        showOpenError('Cannot open book', `Cannot parse or import "${file.name}".`, error)
     } finally {
-        status.textContent = '正在打开…'
+        status.textContent = 'Opening…'
         $('#loading').hidden = true
         $('#file-input').value = ''
     }
@@ -1309,7 +1340,7 @@ const bookMatches = (record, query) => {
 const openLibraryRecord = record => {
     const file = fileFromRecord(record)
     if (!file) {
-        showToast('该书库条目没有可用文件路径，请重新导入原始文件')
+        showToast('No file path available for this library entry; please re-import the original file')
         return
     }
     return openFile(file, record.id, record)
@@ -1321,7 +1352,7 @@ const openRecordExternally = async record => {
         return
     }
     if (!record.blob) {
-        throw new Error('原始图书文件路径不可用，请重新导入图书')
+        throw new Error('Original book file path is not available; please re-import the book')
     }
     if (!invoke) {
         const link = document.createElement('a')
@@ -1329,15 +1360,15 @@ const openRecordExternally = async record => {
         link.download = record.name
         link.click()
         setTimeout(() => URL.revokeObjectURL(link.href), 1000)
-        showToast('浏览器版本已将图书导出，请使用其他程序打开')
+        showToast('Browser version exported the book; open it with another program')
         return
     }
-    throw new Error('旧版书库副本不能直接外部打开，请重新导入原始文件')
+    throw new Error('Legacy library record cannot be opened externally; please re-import the original file')
 }
 
 const removeLibraryRecord = async record => {
-    if (!confirm(`从书库中删除《${record.title}》？`)) return
-    const clearData = confirm('是否同时删除阅读进度、批注和书签？\n选择“取消”将保留阅读数据。')
+    if (!confirm(`Remove "${record.title}" from library?`)) return
+    const clearData = confirm('Also delete reading progress, annotations, and bookmarks?\nClick "Cancel" to keep reading data.')
     if (!clearData) {
         localStorage.setItem(`reader-data:${record.id}`, JSON.stringify({
             annotations: record.annotations ?? [],
@@ -1350,7 +1381,7 @@ const removeLibraryRecord = async record => {
     }
     await library.remove(record.id)
     await renderLibrary()
-    showToast('已从书库删除')
+    showToast('Removed from library')
 }
 
 const cleanupRetainedReadingData = async () => {
@@ -1362,18 +1393,18 @@ const cleanupRetainedReadingData = async () => {
         if (match && !ids.has(match[1])) keys.push(key)
     }
     if (!keys.length) {
-        $('#cleanup-status').textContent = '没有已移除图书留下的阅读数据。'
+        $('#cleanup-status').textContent = 'No retained reading data from removed books.'
         return
     }
-    if (!confirm(`确定清理 ${keys.length} 项已移除图书的阅读进度、批注和书签吗？`))
+    if (!confirm(`Clean ${keys.length} retained reading entries from removed books?`))
         return
     for (const key of keys) localStorage.removeItem(key)
-    $('#cleanup-status').textContent = `已清理 ${keys.length} 项残留阅读数据。`
+    $('#cleanup-status').textContent = `Cleaned ${keys.length} retained reading entries.`
 }
 
 const cleanupTemporaryFiles = async () => {
     if (!invoke) {
-        $('#cleanup-status').textContent = '浏览器预览模式没有应用临时目录。'
+        $('#cleanup-status').textContent = 'Browser preview mode has no application temp directory.'
         return
     }
     try {
@@ -1382,10 +1413,10 @@ const cleanupTemporaryFiles = async () => {
             ? `${Math.round(result.bytes / 1024)} KB`
             : `${(result.bytes / 1024 / 1024).toFixed(1)} MB`
         $('#cleanup-status').textContent =
-            `已清理 ${result.files} 个临时文件，共 ${size}。`
+            `Cleaned ${result.files} temporary file${result.files > 1 ? 's' : ''}, total ${size}.`
     } catch (error) {
         $('#cleanup-status').textContent =
-            `无法清理临时文件：${error?.message || String(error)}`
+            `Cannot clean temporary files: ${error?.message || String(error)}`
     }
 }
 
@@ -1408,13 +1439,13 @@ const createBookCard = record => {
     const cover = document.createElement('button')
     cover.type = 'button'
     cover.className = 'book-card-cover'
-    cover.title = `打开《${record.title}》`
+    cover.title = `Open "${record.title}"`
     if (record.cover) {
         const image = document.createElement('img')
         const url = URL.createObjectURL(record.cover)
         libraryCoverURLs.push(url)
         image.src = url
-        image.alt = `${record.title} 封面`
+        image.alt = `${record.title} cover`
         cover.append(image)
     } else {
         const placeholder = document.createElement('span')
@@ -1443,14 +1474,14 @@ const createBookCard = record => {
     const actions = document.createElement('div')
     actions.className = 'book-card-actions'
     for (const [label, iconName, handler] of [
-        ['信息', 'info', () => showLibraryBookInfo(record)],
-        ['新窗口', 'copy-plus', () => invoke
+        ['Info', 'info', () => showLibraryBookInfo(record)],
+        ['New Window', 'copy-plus', () => invoke
             ? invoke('new_window', { bookId: record.id, bookPath: null }).catch(error =>
                 showToast(error?.message || String(error)))
             : globalThis.open(`?book=${encodeURIComponent(record.id)}`, '_blank', 'noopener')],
-        ['外部打开', 'external-link', () => openRecordExternally(record).catch(error =>
+        ['Open Externally', 'external-link', () => openRecordExternally(record).catch(error =>
             showToast(error?.message || String(error)))],
-        ['删除', 'trash-2', () => removeLibraryRecord(record)],
+        ['Delete', 'trash-2', () => removeLibraryRecord(record)],
     ]) {
         const button = document.createElement('button')
         button.type = 'button'
@@ -1467,8 +1498,8 @@ const createBookCard = record => {
     const menuButton = document.createElement('button')
     menuButton.type = 'button'
     menuButton.className = 'book-card-menu-button'
-    menuButton.title = '更多操作'
-    menuButton.setAttribute('aria-label', '更多操作')
+    menuButton.title = 'More Actions'
+    menuButton.setAttribute('aria-label', 'More Actions')
     menuButton.setAttribute('aria-expanded', 'false')
     const menuIcon = document.createElement('i')
     menuIcon.dataset.lucide = 'more-horizontal'
@@ -1523,8 +1554,7 @@ const renderLibrary = async (reload = true) => {
     const icon = document.createElement('i')
     icon.dataset.lucide = libraryListView ? 'grid-2-x-2' : 'list'
     button.append(icon)
-    button.title = libraryListView ? '切换网格视图' : '切换列表视图'
-    originalAttributes?.delete?.(button)
+    button.title = libraryListView ? 'Switch to Grid View' : 'Switch to List View'
     createIcons({ icons, root: button })
     applyLanguage()
 }
@@ -1543,9 +1573,8 @@ const setTheme = preference => {
     const icon = document.createElement('i')
     icon.dataset.lucide = theme === 'dark' ? 'sun' : 'moon'
     button.append(icon)
-    button.title = theme === 'dark' ? '切换浅色模式' : '切换深色模式'
+    button.title = theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'
     button.setAttribute('aria-label', button.title)
-    originalAttributes?.delete?.(button)
     createIcons({ icons, root: button })
     reader.applyTheme()
     applyLanguage()
@@ -1571,10 +1600,9 @@ const renderSidebarPin = () => {
     icon.dataset.lucide = sidebarPinned ? 'pin' : 'pin-off'
     button.append(icon)
     button.classList.toggle('selected', sidebarPinned)
-    button.title = sidebarPinned ? '取消固定侧栏' : '固定侧栏'
+    button.title = sidebarPinned ? 'Unpin Sidebar' : 'Pin Sidebar'
     button.setAttribute('aria-label', button.title)
     button.setAttribute('aria-pressed', String(sidebarPinned))
-    originalAttributes.delete(button)
     createIcons({ icons, root: button })
     applyLanguage()
 }
@@ -1602,7 +1630,10 @@ const chooseFile = async () => {
     }
     try {
         const [info] = await invoke('choose_books', { multiple: false })
-        if (info) await openPickedFile(nativeBookFromInfo(info), info.path.toLowerCase())
+        if (info) {
+            const managed = await syncManagedBook(info)
+            await openPickedFile(nativeBookFromInfo(managed), managed.path.toLowerCase())
+        }
     } catch (error) {
         showToast(error?.message || String(error))
     }
@@ -1614,7 +1645,9 @@ const chooseImport = async () => {
     }
     try {
         const infos = await invoke('choose_books', { multiple: true })
-        await importBooks(infos.map(nativeBookFromInfo))
+        const managed = []
+        for (const info of infos) managed.push(await syncManagedBook(info))
+        await importBooks(managed.map(nativeBookFromInfo))
     } catch (error) {
         showToast(error?.message || String(error))
     }
@@ -1633,8 +1666,8 @@ const openFile = async (file, storageIdentity = null, libraryRecord = null) => {
     lastOpenRequest = { file, storageIdentity, libraryRecord }
     const extension = getExtension(file.name)
     if (!supportedExtensions.includes(extension)) {
-        showOpenError('不支持的格式',
-            `Foliate 无法打开 “${file.name}”。`, new Error(`不支持扩展名 .${extension || ''}`))
+        showOpenError('Unsupported Format',
+            `Foliate cannot open "${file.name}".`, new Error(`Unsupported extension .${extension || ''}`))
         return
     }
     clearTimeout(loadingTimer)
@@ -1647,8 +1680,8 @@ const openFile = async (file, storageIdentity = null, libraryRecord = null) => {
         else openSidebar()
     } catch (error) {
         console.error(error)
-        showOpenError('无法打开图书',
-            `无法解析或显示 “${file.name}”。`, error)
+        showOpenError('Cannot open book',
+            `Cannot parse or display "${file.name}".`, error)
         if (!reader.view?.book) await reader.close()
     } finally {
         clearTimeout(loadingTimer)
@@ -1816,7 +1849,7 @@ const copyText = async text => {
         document.execCommand('copy')
         input.remove()
     }
-    showToast('已复制')
+    showToast('Copied')
 }
 
 const normalizeLanguage = lang => {
@@ -1844,33 +1877,33 @@ const lookupSelection = async (tool, context) => {
     const word = context.text.trim()
     const lang = normalizeLanguage(context.lang)
     const titles = {
-        dictionary: '词典',
+        dictionary: 'Dictionary',
         wikipedia: 'Wikipedia',
-        translate: '翻译',
+        translate: 'Translate',
     }
     currentLookupTool = tool
     currentLookupContext = context
     $('#lookup-title').textContent = titles[tool]
     $('#lookup-search-input').value = word
-    content.textContent = '正在查询…'
+    content.textContent = 'Looking up…'
     source.replaceChildren()
     $('#translation-language-row').hidden = tool !== 'translate'
     if (!dialog.open) dialog.showModal()
 
     try {
-        if (!navigator.onLine) throw new Error('当前处于离线状态，无法使用在线查询')
+        if (!navigator.onLine) throw new Error('Currently offline; online lookup is not available')
         if (tool === 'dictionary') {
             const url = `https://en.wiktionary.org/api/rest_v1/page/definition/${
                 encodeURIComponent(word)}`
             const response = await fetch(url)
-            if (!response.ok) throw new Error('没有找到释义')
+            if (!response.ok) throw new Error('No definition found')
             const json = await response.json()
             const groups = json[lang] ?? json.en ?? Object.values(json)[0]
-            if (!groups?.length) throw new Error('没有找到释义')
+            if (!groups?.length) throw new Error('No definition found')
             content.replaceChildren()
             for (const group of groups) {
                 const heading = document.createElement('h3')
-                heading.textContent = group.partOfSpeech || group.language || '释义'
+                heading.textContent = group.partOfSpeech || group.language || 'Definition'
                 const list = document.createElement('ol')
                 for (const definition of group.definitions ?? []) {
                     const item = document.createElement('li')
@@ -1896,7 +1929,7 @@ const lookupSelection = async (tool, context) => {
             const url = `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${
                 encodeURIComponent(word)}`
             const response = await fetch(url)
-            if (!response.ok) throw new Error('没有找到条目')
+            if (!response.ok) throw new Error('No article found')
             const json = await response.json()
             content.replaceChildren()
             const title = document.createElement('h3')
@@ -1904,7 +1937,7 @@ const lookupSelection = async (tool, context) => {
             const description = document.createElement('strong')
             description.textContent = json.description || ''
             const extract = document.createElement('p')
-            extract.textContent = json.extract || '没有可显示的摘要'
+            extract.textContent = json.extract || 'No summary available'
             if (json.thumbnail?.source) {
                 const image = document.createElement('img')
                 image.className = 'lookup-thumbnail'
@@ -1926,14 +1959,14 @@ const lookupSelection = async (tool, context) => {
                 + `&ie=UTF-8&oe=UTF-8&sl=auto&tl=${encodeURIComponent(target)}`
                 + `&dt=t&q=${encodeURIComponent(word)}`
             const response = await fetch(url)
-            if (!response.ok) throw new Error('无法获取翻译')
+            if (!response.ok) throw new Error('Cannot fetch translation')
             const json = await response.json()
             content.textContent = json[0].map(item => item[0]).join('')
             source.textContent = 'Google Translate'
         }
     } catch (error) {
         console.error(error)
-        content.textContent = error.message || '查询失败，请检查网络连接'
+        content.textContent = error.message || 'Lookup failed; check your network connection'
     }
 }
 
@@ -1944,7 +1977,7 @@ const openExternal = async url => {
         else globalThis.open(url, '_blank', 'noopener')
     } catch (error) {
         console.error(error)
-        showToast('无法打开外部链接')
+        showToast('Cannot open external link')
     }
 }
 
@@ -1956,7 +1989,7 @@ const imageBlobFromElement = async element => {
     }
     const source = element.currentSrc || element.src
     const response = await fetch(source)
-    if (!response.ok) throw new Error('无法读取插图')
+    if (!response.ok) throw new Error('Cannot read illustration')
     return response.blob()
 }
 
@@ -2042,26 +2075,26 @@ const printBook = async () => {
 
 const renderBookInfo = (metadata, file) => {
     const fields = [
-        ['标题', formatLanguageMap(metadata.title) || file.name],
-        ['副标题', formatLanguageMap(metadata.subtitle)],
-        ['作者', formatContributor(metadata.author)],
-        ['译者', formatContributor(metadata.translator)],
-        ['编辑', formatContributor(metadata.editor)],
-        ['朗读者', formatContributor(metadata.narrator)],
-        ['插画者', formatContributor(metadata.illustrator)],
-        ['其他贡献者', formatContributor(metadata.contributor)],
-        ['简介', stripHTML(formatLanguageMap(metadata.description) || String(metadata.description ?? ''))],
-        ['语言', metadata.language],
-        ['出版社', formatLanguageMap(metadata.publisher)],
-        ['出版日期', metadata.published],
-        ['修改日期', metadata.modified],
-        ['主题分类', [].concat(metadata.subject ?? []).map(subject =>
-            formatLanguageMap(subject?.name ?? subject)).filter(Boolean).join('、')],
-        ['版权', formatLanguageMap(metadata.rights)],
-        ['格式', getExtension(file.name)?.toUpperCase()],
-        ['文件大小', `${(file.size / 1024 / 1024).toFixed(1)} MB`],
-        ['文件位置', file.sourcePath],
-        ['标识符', formatLanguageMap(metadata.identifier)],
+        ['Title', formatLanguageMap(metadata.title) || file.name],
+        ['Subtitle', formatLanguageMap(metadata.subtitle)],
+        ['Author', formatContributor(metadata.author)],
+        ['Translator', formatContributor(metadata.translator)],
+        ['Editor', formatContributor(metadata.editor)],
+        ['Narrator', formatContributor(metadata.narrator)],
+        ['Illustrator', formatContributor(metadata.illustrator)],
+        ['Contributors', formatContributor(metadata.contributor)],
+        ['Description', stripHTML(formatLanguageMap(metadata.description) || String(metadata.description ?? ''))],
+        ['Language', metadata.language],
+        ['Publisher', formatLanguageMap(metadata.publisher)],
+        ['Publication Date', metadata.published],
+        ['Modified Date', metadata.modified],
+        ['Subjects', [].concat(metadata.subject ?? []).map(subject =>
+            formatLanguageMap(subject?.name ?? subject)).filter(Boolean).join(', ')],
+        ['Rights', formatLanguageMap(metadata.rights)],
+        ['Format', getExtension(file.name)?.toUpperCase()],
+        ['File Size', `${(file.size / 1024 / 1024).toFixed(1)} MB`],
+        ['File Location', file.sourcePath],
+        ['Identifier', formatLanguageMap(metadata.identifier)],
     ].filter(([, value]) => value)
     const dl = document.createElement('dl')
     for (const [label, value] of fields) {
@@ -2095,8 +2128,8 @@ const annotationExportData = () => ({
 
 const annotationExportContents = format => {
     const data = annotationExportData()
-    const title = `《${data.metadata.title}》的批注`
-    const total = `${data.annotations.length} 条批注`
+    const title = `《${data.metadata.title}》 Annotations`
+    const total = `${data.annotations.length}  annotations`
     if (format === 'json') return JSON.stringify(data, null, 2)
     if (format === 'html') return `<!doctype html><meta charset="utf-8">
 <meta name="viewport" content="width=device-width"><title>${escapeHTML(title)}</title>
@@ -2115,7 +2148,7 @@ blockquote{margin-inline:0;padding-inline-start:1em;border-inline-start:.5em sol
     if (format === 'md') return `# ${title}\n\n${total}${
         data.annotations.map(({ value, text, color, note, label }) => `
 
-## ${label || '未命名章节'}
+## ${label || 'Untitled chapter'}
 
 **${color}** — \`${value}\`
 
@@ -2125,7 +2158,7 @@ ${note || ''}`).join('')}`
     return `* ${title}\n${total}\n${data.annotations.map(({
         value, text, color, note, label,
     }) => `
-** ${label || '未命名章节'}
+** ${label || 'Untitled chapter'}
 *${color}* - \`${value}\`
 
 #+begin_quote
@@ -2137,7 +2170,7 @@ ${note || ''}
 
 const exportAnnotations = format => {
     if (!reader.annotations.length) {
-        showToast('当前图书没有批注')
+        showToast('No annotations in current book')
         return
     }
     const extensions = { json: 'json', html: 'html', md: 'md', org: 'org' }
@@ -2156,11 +2189,11 @@ const exportAnnotations = format => {
 const importAnnotations = async file => {
     const data = JSON.parse(await file.text())
     if (!Array.isArray(data.annotations) || !data.annotations.length)
-        throw new Error('导入文件中没有批注')
+        throw new Error('Import file contains no annotations')
     const importedIdentifier = normalizeIdentifier(data.metadata?.identifier)
     const currentIdentifier = normalizeIdentifier(reader.metadata.identifier) || reader.bookId
     if (importedIdentifier && importedIdentifier !== currentIdentifier
-    && !confirm('导入文件的图书标识符与当前图书不一致。仍要导入吗？')) return
+    && !confirm('Import file book identifier does not match current book. Import anyway?')) return
     let added = 0
     for (const annotation of data.annotations) {
         if (!annotation?.value
@@ -2171,7 +2204,7 @@ const importAnnotations = async file => {
     }
     reader.saveData()
     reader.renderAnnotations()
-    showToast(`已导入 ${added} 条批注`)
+    showToast(`Imported ${added} annotation${added > 1 ? 's' : ''}`)
 }
 
 const openBookSearch = () => {
@@ -2190,7 +2223,7 @@ const closeBookSearch = async () => {
     reader.searchResults = []
     reader.searchIndex = -1
     $('#search-results').replaceChildren()
-    $('#search-status').textContent = '输入关键词开始搜索'
+    $('#search-status').textContent = 'Type to search'
     $('#search-previous').disabled = true
     $('#search-next').disabled = true
     setSidebarPanel(panelBeforeSearch === 'search' ? 'toc' : panelBeforeSearch)
@@ -2207,8 +2240,9 @@ const setRangeControl = (id, outputId, value, suffix = '') => {
 }
 
 const syncPreferenceControls = () => {
-    $('#language-select').value = localStorage.getItem('language') || 'zh-CN'
+    $('#language-select').value = localStorage.getItem('language') || 'en'
     $('#library-open-mode-select').value = libraryOpenMode
+    $('#copy-to-library-input').checked = copyToLibrary
     $('#book-theme-select').value = reader.bookTheme
     setRangeControl('#font-size-input', '#font-size-output', reader.fontSize, ' px')
     setRangeControl('#minimum-font-size-input', '#minimum-font-size-output',
@@ -2228,6 +2262,7 @@ const syncPreferenceControls = () => {
     setRangeControl('#max-columns-input', '#max-columns-output', reader.maxColumns)
     $('#reduce-animation-input').checked = reader.reduceAnimation
     $('#invert-dark-input').checked = reader.invertDark
+    $('#white-bg-input').checked = reader.whiteBG
     $('#autohide-cursor-input').checked = reader.autohideCursor
     $('#pdf-zoom-select').value = reader.pdfZoom
     $('#pdf-wheel-input').checked = reader.pdfWheel
@@ -2240,7 +2275,7 @@ const syncPreferenceControls = () => {
 let systemFontsPromise
 const loadSystemFonts = () => systemFontsPromise ??= (async () => {
     const status = $('#font-list-status')
-    status.textContent = '正在读取 Windows 字体列表…'
+    status.textContent = 'Loading Windows font list…'
     try {
         const fallback = [
             'Arial', 'Calibri', 'Cambria', 'Consolas', 'Georgia',
@@ -2255,10 +2290,10 @@ const loadSystemFonts = () => systemFontsPromise ??= (async () => {
             fragment.append(option)
         }
         $('#system-fonts').replaceChildren(fragment)
-        status.textContent = `已读取 ${unique.length} 个字体系列；输入名称可快速筛选。`
+        status.textContent = `Loaded ${unique.length} font families; type a name to filter.`
     } catch (error) {
         console.warn(error)
-        status.textContent = '无法读取系统字体列表，仍可手动输入字体名称。'
+        status.textContent = 'Cannot read system font list; you can still type a font name.'
     }
 })()
 
@@ -2272,18 +2307,18 @@ const selectPreferencesTab = tab => {
 const refreshSystemIntegrationStatus = async () => {
     const status = $('#system-integration-status')
     if (!invoke) {
-        status.textContent = '系统集成功能仅在 Windows 桌面版中可用。'
+        status.textContent = 'System integration is only available in the Windows desktop edition.'
         return
     }
-    status.textContent = '正在读取当前状态…'
+    status.textContent = 'Reading current status…'
     try {
         const current = await invoke('system_integration_status')
         status.textContent = [
-            `文件关联：${current.associations ? '已启用' : '未启用'}`,
-            `桌面快捷方式：${current.desktopShortcut ? '已创建' : '未创建'}`,
+            `File associations: ${current.associations ? 'Enabled' : 'Disabled'}`,
+            `Desktop shortcut: ${current.desktopShortcut ? 'Created' : 'Not created'}`,
         ].join('；')
     } catch (error) {
-        status.textContent = `无法读取系统集成状态：${error?.message || String(error)}`
+        status.textContent = `Cannot read system integration status: ${error?.message || String(error)}`
     }
 }
 
@@ -2291,7 +2326,7 @@ const runSystemIntegrationAction = async (command, args, successMessage) => {
     const buttons = $$('.system-integration-actions button')
     for (const button of buttons) button.disabled = true
     try {
-        if (!invoke) throw new Error('系统集成功能仅在 Windows 桌面版中可用')
+        if (!invoke) throw new Error('System integration is only available in the Windows desktop edition')
         await invoke(command, args)
         showToast(successMessage)
     } catch (error) {
@@ -2314,185 +2349,188 @@ const openPreferences = tab => {
     if (tab === 'system') refreshSystemIntegrationStatus()
 }
 
-const englishText = {
-    '书库': 'Library',
-    '导入图书': 'Import Books',
-    '打开电子书': 'Open Book',
-    '搜索书库…': 'Search library…',
-    '切换浅色模式': 'Switch to Light Mode',
-    '切换深色模式': 'Switch to Dark Mode',
-    '切换网格视图': 'Switch to Grid View',
-    '切换列表视图': 'Switch to List View',
-    '没有匹配的图书': 'No matching books',
-    '目录': 'Contents',
-    '批注': 'Annotations',
-    '书签': 'Bookmarks',
-    '上一页': 'Previous Page',
-    '下一页': 'Next Page',
-    '返回': 'Back',
-    '前进': 'Forward',
-    '添加书签': 'Add Bookmark',
-    '隐藏侧栏': 'Hide Sidebar',
-    '显示侧栏': 'Show Sidebar',
-    '固定侧栏': 'Pin Sidebar',
-    '取消固定侧栏': 'Unpin Sidebar',
-    '在书中搜索': 'Search in Book',
-    '关闭搜索': 'Close Search',
-    '上一个结果': 'Previous Result',
-    '下一个结果': 'Next Result',
-    '图书导航': 'Book Navigation',
-    '图书目录': 'Table of Contents',
-    '侧栏内容': 'Sidebar Content',
-    '在书中查找…': 'Find in book…',
-    '搜索批注…': 'Search annotations…',
-    '搜索书签…': 'Search bookmarks…',
-    '搜索词条…': 'Search entry…',
-    '整本书': 'Whole book',
-    '当前章节': 'Current section',
-    '完整单词': 'Whole words',
-    '区分大小写': 'Match case',
-    '区分音调符号': 'Match diacritics',
-    '输入关键词开始搜索': 'Type to search',
-    '复制': 'Copy',
-    '引用': 'Citation',
-    '书内查找': 'Find',
-    '朗读': 'Speak',
-    '高亮': 'Highlight',
-    '词典': 'Dictionary',
-    '翻译': 'Translate',
-    '打印': 'Print',
-    '添加笔记…': 'Add a note…',
-    '批注样式': 'Annotation Style',
-    '下划线': 'Underline',
-    '波浪线': 'Squiggly',
-    '删除线': 'Strikethrough',
-    '自定义颜色': 'Custom Color',
-    '删除': 'Delete',
-    '完成': 'Done',
-    '关闭': 'Close',
-    '取消': 'Cancel',
-    '更多操作': 'More Actions',
-    '设置': 'Settings',
-    '界面设置': 'Interface',
-    '电子书阅读': 'E-book Reading',
-    'PDF 阅读': 'PDF Reading',
-    '划词工具': 'Selection Tools',
-    '系统集成': 'System Integration',
-    '脚注': 'Footnote',
-    '转到脚注': 'Go to Footnote',
-    '查询': 'Lookup',
-    '界面外观': 'Interface Appearance',
-    '界面语言': 'Interface Language',
-    '书库行为': 'Library Behavior',
-    '打开图书时': 'When Opening a Book',
-    '打开并自动导入书库': 'Open and Import Automatically',
-    '仅打开，按需手动导入': 'Open Only; Import Manually',
-    '自动导入模式保留一个书库入口；手动模式会同时显示“打开”和“导入”两个入口。':
-        'Auto-import keeps one open entry; manual mode shows separate Open and Import actions.',
-    '存储清理': 'Storage Cleanup',
-    '清理已移除图书的阅读数据': 'Clear Retained Reading Data',
-    '清理临时文件': 'Clear Temporary Files',
-    '清理操作不会删除仍在书库中的阅读进度、批注或书签，也不会删除原始图书文件。':
-        'Cleanup does not delete data for books still in the library or original book files.',
-    '跟随系统': 'Follow System',
-    '浅色': 'Light',
-    '深色': 'Dark',
-    '字体': 'Font',
-    '阅读主题': 'Reading Theme',
-    '默认字号': 'Default Font Size',
-    '最小字号': 'Minimum Font Size',
-    '默认字体': 'Default Font',
-    '衬线体': 'Serif',
-    '无衬线体': 'Sans-serif',
-    '覆盖出版商字体': 'Override Publisher Font',
-    '衬线字体': 'Serif Font',
-    '无衬线字体': 'Sans-serif Font',
-    '等宽字体': 'Monospace Font',
-    '布局': 'Layout',
-    '分页': 'Paginated',
-    '滚动': 'Scrolled',
-    '行距': 'Line Height',
-    '两端对齐': 'Justify',
-    '自动断词': 'Hyphenation',
-    '页边距': 'Page Margin',
-    '最大行宽': 'Maximum Inline Size',
-    '最大页面高度': 'Maximum Block Size',
-    '最大列数': 'Maximum Columns',
-    '行为': 'Behavior',
-    '减少翻页动画': 'Reduce Animation',
-    '暗色模式反色': 'Invert in Dark Mode',
-    '阅读时自动隐藏光标': 'Autohide Cursor',
-    '页面缩放': 'Page Zoom',
-    '适合页面': 'Fit Page',
-    '适合宽度': 'Fit Width',
-    '鼠标滚轮翻页': 'Turn Pages with Mouse Wheel',
-    '显示划词工具条': 'Show Selection Toolbar',
-    '工具': 'Tools',
-    '当前位置': 'Current Location',
-    '本章节剩余': 'Section Remaining',
-    '全书剩余': 'Book Remaining',
-    '出版物页码': 'Publication Page',
-    '位置': 'Location',
-    '章节': 'Section',
-    '转到': 'Go',
-    '粘贴': 'Paste',
-    '跳转到': 'Jump to',
-    '第一章': 'First',
-    '上一章': 'Previous',
-    '下一章': 'Next',
-    '最后一章': 'Last',
-    '图书信息': 'Book Information',
-    '文件位置': 'File Location',
-    '阅读器菜单': 'Reader Menu',
-    '阅读设置': 'Reading Settings',
-    '重新加载': 'Reload',
-    '在新窗口打开': 'Open in New Window',
-    '全屏': 'Fullscreen',
-    '打印整本书': 'Print Book',
-    '导入批注': 'Import Annotations',
-    '导出批注': 'Export Annotations',
-    '键盘快捷键': 'Keyboard Shortcuts',
-    '关于': 'About',
-    '格式': 'Format',
-    '导出': 'Export',
-    '错误详情': 'Error Details',
-    '重试': 'Retry',
-    '关于 Foliate for Windows': 'About Foliate for Windows',
-    '许可证与依赖': 'Licenses and Dependencies',
-    '调试信息': 'Debug Information',
-    '信息': 'Info',
-    '新窗口': 'New Window',
-    '外部打开': 'Open Externally',
-    '文件关联': 'File Associations',
-    '关联支持的文件类型': 'Associate Supported File Types',
-    '取消文件关联': 'Remove File Associations',
-    '桌面快捷方式': 'Desktop Shortcut',
-    '发送桌面快捷方式': 'Create Desktop Shortcut',
-    '移除桌面快捷方式': 'Remove Desktop Shortcut',
-    '翻译为': 'Translate to',
-    '正在打开…': 'Opening…',
-    '选择正文后即可添加批注。': 'Select text in the book to add an annotation.',
-    '使用底部的书签按钮保存当前位置。': 'Use the bookmark button below to save this location.',
-    '竖排、从右向左阅读和固定版式会遵循图书自身的排版信息。':
-        'Vertical writing, right-to-left reading, and fixed layout follow the publication.',
+
+const chineseText = {
+    'Library': '书库',
+    'Import Books': '导入图书',
+    'Open Book': '打开电子书',
+    'Search library…': '搜索书库…',
+    'Switch to Light Mode': '切换浅色模式',
+    'Switch to Dark Mode': '切换深色模式',
+    'Switch to Grid View': '切换网格视图',
+    'Switch to List View': '切换列表视图',
+    'No matching books': '没有匹配的图书',
+    'Contents': '目录',
+    'Annotations': '批注',
+    'Bookmarks': '书签',
+    'Previous Page': '上一页',
+    'Next Page': '下一页',
+    'Back': '返回',
+    'Forward': '前进',
+    'Add Bookmark': '添加书签',
+    'Hide Sidebar': '隐藏侧栏',
+    'Show Sidebar': '显示侧栏',
+    'Pin Sidebar': '固定侧栏',
+    'Unpin Sidebar': '取消固定侧栏',
+    'Search in Book': '在书中搜索',
+    'Close Search': '关闭搜索',
+    'Previous Result': '上一个结果',
+    'Next Result': '下一个结果',
+    'Book Navigation': '图书导航',
+    'Table of Contents': '图书目录',
+    'Sidebar Content': '侧栏内容',
+    'Find in book…': '在书中查找…',
+    'Search annotations…': '搜索批注…',
+    'Search bookmarks…': '搜索书签…',
+    'Search entry…': '搜索词条…',
+    'Whole book': '整本书',
+    'Current section': '当前章节',
+    'Whole words': '完整单词',
+    'Match case': '区分大小写',
+    'Match diacritics': '区分音调符号',
+    'Type to search': '输入关键词开始搜索',
+    'Copy': '复制',
+    'Citation': '引用',
+    'Find': '书内查找',
+    'Speak': '朗读',
+    'Highlight': '高亮',
+    'Dictionary': '词典',
+    'Translate': '翻译',
+    'Print': '打印',
+    'Add a note…': '添加笔记…',
+    'Annotation Style': '批注样式',
+    'Underline': '下划线',
+    'Squiggly': '波浪线',
+    'Strikethrough': '删除线',
+    'Custom Color': '自定义颜色',
+    'Delete': '删除',
+    'Done': '完成',
+    'Close': '关闭',
+    'Cancel': '取消',
+    'More Actions': '更多操作',
+    'Settings': '设置',
+    'Interface': '界面设置',
+    'E-book Reading': '电子书阅读',
+    'PDF Reading': 'PDF 阅读',
+    'Selection Tools': '划词工具',
+    'System Integration': '系统集成',
+    'Footnote': '脚注',
+    'Go to Footnote': '转到脚注',
+    'Lookup': '查询',
+    'Interface Appearance': '界面外观',
+    'Interface Language': '界面语言',
+    'Library Behavior': '书库行为',
+    'When Opening a Book': '打开图书时',
+    'Open and Import Automatically': '打开并自动导入书库',
+    'Open Only; Import Manually': '仅打开，按需手动导入',
+    'Auto-import keeps one open entry; manual mode shows separate Open and Import actions.': '自动导入模式保留一个书库入口；手动模式会同时显示“打开”和“导入”两个入口。',
+    'Copy Books to Library Folder': '复制图书到书库文件夹',
+    'When on, a managed copy of each imported book lives in the Foliate library folder so the book stays openable after the original file is moved or deleted. Default is on.': '启用后，每本导入图书的托管副本会保留在 Foliate 书库文件夹中，即使原文件被移动或删除，该图书仍可继续打开。默认为开启状态。',
+    'Storage Cleanup': '存储清理',
+    'Clear Retained Reading Data': '清理已移除图书的阅读数据',
+    'Clear Temporary Files': '清理临时文件',
+    'Cleanup does not delete data for books still in the library or original book files.': '清理操作不会删除仍在书库中的阅读进度、批注或书签，也不会删除原始图书文件。',
+    'Follow System': '跟随系统',
+    'Light': '浅色',
+    'Dark': '深色',
+    'Font': '字体',
+    'Reading Theme': '阅读主题',
+    'Default Font Size': '默认字号',
+    'Minimum Font Size': '最小字号',
+    'Default Font': '默认字体',
+    'Serif': '衬线体',
+    'Sans-serif': '无衬线体',
+    'Override Publisher Font': '覆盖出版商字体',
+    'Serif Font': '衬线字体',
+    'Sans-serif Font': '无衬线字体',
+    'Monospace Font': '等宽字体',
+    'Layout': '布局',
+    'Paginated': '分页',
+    'Scrolled': '滚动',
+    'Line Height': '行距',
+    'Justify': '两端对齐',
+    'Hyphenation': '自动断词',
+    'Page Margin': '页边距',
+    'Maximum Inline Size': '最大行宽',
+    'Maximum Block Size': '最大页面高度',
+    'Maximum Columns': '最大列数',
+    'Behavior': '行为',
+    'Reduce Animation': '减少翻页动画',
+    'Invert in Dark Mode': '暗色模式反色',
+    'Autohide Cursor': '阅读时自动隐藏光标',
+    'Page Zoom': '页面缩放',
+    'Fit Page': '适合页面',
+    'Fit Width': '适合宽度',
+    'Turn Pages with Mouse Wheel': '鼠标滚轮翻页',
+    'Show Selection Toolbar': '显示划词工具条',
+    'Tools': '工具',
+    'Current Location': '当前位置',
+    'Section Remaining': '本章节剩余',
+    'Book Remaining': '全书剩余',
+    'Publication Page': '出版物页码',
+    'Location': '位置',
+    'Section': '章节',
+    'Go': '转到',
+    'Paste': '粘贴',
+    'Jump to': '跳转到',
+    'First': '第一章',
+    'Previous': '上一章',
+    'Next': '下一章',
+    'Last': '最后一章',
+    'Book Information': '图书信息',
+    'File Location': '文件位置',
+    'Reader Menu': '阅读器菜单',
+    'Reading Settings': '阅读设置',
+    'Reload': '重新加载',
+    'Open in New Window': '在新窗口打开',
+    'Fullscreen': '全屏',
+    'Print Book': '打印整本书',
+    'Import Annotations': '导入批注',
+    'Export Annotations': '导出批注',
+    'Keyboard Shortcuts': '键盘快捷键',
+    'About': '关于',
+    'Format': '格式',
+    'Export': '导出',
+    'Error Details': '错误详情',
+    'Retry': '重试',
+    'About Foliate for Windows': '关于 Foliate for Windows',
+    'Licenses and Dependencies': '许可证与依赖',
+    'Debug Information': '调试信息',
+    'Info': '信息',
+    'New Window': '新窗口',
+    'Open Externally': '外部打开',
+    'File Associations': '文件关联',
+    'Associate Supported File Types': '关联支持的文件类型',
+    'Remove File Associations': '取消文件关联',
+    'Desktop Shortcut': '桌面快捷方式',
+    'Create Desktop Shortcut': '发送桌面快捷方式',
+    'Remove Desktop Shortcut': '移除桌面快捷方式',
+    'Translate to': '翻译为',
+    'Opening…': '正在打开…',
+    'Select text in the book to add an annotation.': '选择正文后即可添加批注。',
+    'Use the bookmark button below to save this location.': '使用底部的书签按钮保存当前位置。',
+    'Vertical writing, right-to-left reading, and fixed layout follow the publication.': '竖排、从右向左阅读和固定版式会遵循图书自身的排版信息。',
 }
 const originalText = new WeakMap()
 const originalAttributes = new WeakMap()
 
-const applyLanguage = (language = localStorage.getItem('language') || 'zh-CN') => {
+const applyLanguage = (language = localStorage.getItem('language') || 'en') => {
     document.documentElement.lang = language
-    $('#language-select').value = language
+    const select = $('#language-select')
+    if (select) select.value = language
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
         if (!node.textContent.trim()) continue
         if (!originalText.has(node)) originalText.set(node, node.textContent)
         const source = originalText.get(node)
         const trimmed = source.trim()
-        if (language === 'en' && englishText[trimmed]) {
+        // ponytail: only translate when we have a Chinese mapping for this English source;
+        // any string without a mapping stays in English (the user-facing requirement).
+        if (language !== 'en' && chineseText[trimmed]) {
             const leading = source.match(/^\s*/)[0]
             const trailing = source.match(/\s*$/)[0]
-            node.textContent = `${leading}${englishText[trimmed]}${trailing}`
-        } else if (language !== 'en') node.textContent = source
+            node.textContent = `${leading}${chineseText[trimmed]}${trailing}`
+        } else if (language === 'en') node.textContent = source
     }
     for (const element of $$('[placeholder], [title], [aria-label]')) {
         if (!originalAttributes.has(element)) {
@@ -2503,7 +2541,7 @@ const applyLanguage = (language = localStorage.getItem('language') || 'zh-CN') =
         }
         for (const [name, source] of Object.entries(originalAttributes.get(element))) {
             element.setAttribute(name,
-                language === 'en' && englishText[source] ? englishText[source] : source)
+                language !== 'en' && chineseText[source] ? chineseText[source] : source)
         }
     }
 }
@@ -2517,18 +2555,18 @@ const showLibrary = async () => {
 }
 
 const shortcutRows = [
-    ['Ctrl+O', '打开图书'],
-    ['Ctrl+Shift+O', '导入图书'],
-    ['Ctrl+F', '书内搜索'],
-    ['Ctrl+G / Ctrl+Shift+G', '下一个/上一个搜索结果'],
-    ['← / → / Page Up / Page Down', '翻页'],
-    ['Alt+← / Alt+→', '阅读历史后退/前进'],
-    ['F5 / Ctrl+R', '重新加载当前图书'],
-    ['F11', '切换全屏'],
-    ['Ctrl+P', '打印整本书'],
-    ['Ctrl+Shift+N', '在新窗口打开'],
-    ['Ctrl+?', '显示快捷键'],
-    ['Esc', '关闭弹窗或侧栏'],
+    ['Ctrl+O', 'Open Book'],
+    ['Ctrl+Shift+O', 'Import Books'],
+    ['Ctrl+F', 'Search in Book'],
+    ['Ctrl+G / Ctrl+Shift+G', 'Next/Previous Search Result'],
+    ['← / → / Page Up / Page Down', 'Turn Page'],
+    ['Alt+← / Alt+→', 'Reading History Back/Forward'],
+    ['F5 / Ctrl+R', 'Reload Current Book'],
+    ['F11', 'Toggle Fullscreen'],
+    ['Ctrl+P', 'Print Book'],
+    ['Ctrl+Shift+N', 'Open in New Window'],
+    ['Ctrl+?', 'Show Shortcuts'],
+    ['Esc', 'Close Dialog or Sidebar'],
 ]
 
 const showShortcuts = () => {
@@ -2545,9 +2583,9 @@ const showShortcuts = () => {
 }
 
 const showAbout = () => {
-    $('#about-version').textContent = runtimeInfo?.version ?? '0.1.3'
+    $('#about-version').textContent = runtimeInfo?.version ?? '0.1.5'
     $('#debug-info').textContent = [
-        `Version: ${runtimeInfo?.version ?? '0.1.3'}`,
+        `Version: ${runtimeInfo?.version ?? '0.1.5'}`,
         `Edition: ${runtimeInfo?.portable ? 'Portable' : invoke ? 'Desktop development' : 'Browser'}`,
         `Platform: ${navigator.platform}`,
         `User agent: ${navigator.userAgent}`,
@@ -2555,6 +2593,7 @@ const showAbout = () => {
         `Online: ${navigator.onLine}`,
         `Data directory: ${runtimeInfo?.dataDir ?? 'WebView profile / browser storage'}`,
         `Current book ID: ${reader.bookId ?? 'None'}`,
+        `Contributions: vihaanvp with OpenCode (AI coding agent)`,
     ].join('\n')
     $('#about-dialog').showModal()
 }
@@ -2584,7 +2623,7 @@ const openCurrentInNewWindow = async () => {
     if (!bookId && invoke && reader.currentFile && reader.view?.book) {
         bookPath = reader.currentFile.sourcePath
         if (!bookPath)
-            throw new Error('当前图书没有 Windows 文件路径，请使用“打开电子书”按钮重新打开')
+            throw new Error('Current book has no Windows file path; use the "Open Book" button to reopen it')
     } else if (!bookId && reader.currentFile && reader.view?.book) {
         const record = await library.import(reader.currentFile, async () => ({
             metadata: reader.metadata,
@@ -2618,7 +2657,7 @@ const openCurrentInNewWindowSafely = async () => {
         await openCurrentInNewWindow()
     } catch (error) {
         console.error(error)
-        showToast(error?.message || String(error) || '无法创建新窗口')
+        showToast(error?.message || String(error) || 'Cannot create new window')
     }
 }
 
@@ -2673,7 +2712,7 @@ $('#previous-button').addEventListener('click', () => reader.view?.goLeft())
 $('#next-button').addEventListener('click', () => reader.view?.goRight())
 $('#bookmark-button').addEventListener('click', () => {
     const removed = reader.toggleBookmark()
-    if (removed) showToast('书签已删除', '撤销', () => reader.restoreBookmark(removed))
+    if (removed) showToast('Bookmark deleted', 'Undo', () => reader.restoreBookmark(removed))
 })
 $('#history-back').addEventListener('click', () => reader.view?.history.back())
 $('#history-forward').addEventListener('click', () => reader.view?.history.forward())
@@ -2729,7 +2768,7 @@ $('#annotation-import-input').addEventListener('change', async event => {
     try {
         if (event.target.files[0]) await importAnnotations(event.target.files[0])
     } catch (error) {
-        showOpenError('无法导入批注', '批注文件无效或无法读取。', error)
+        showOpenError('Cannot import annotations', 'Annotations file is invalid or cannot be read.', error)
     } finally {
         event.target.value = ''
     }
@@ -2784,19 +2823,19 @@ for (const button of $$('#selection-popover [data-selection-action]'))
                 || (Number.isFinite(reader.currentLocation?.location?.current)
                     ? reader.currentLocation.location.current + 1
                     : null)
-            await copyText(`“${context.text.trim()}” — ${[
+            await copyText(`"${context.text.trim()}" — ${[
                 title,
                 author,
-                page ? `第 ${page} 页/位置` : '',
+                page ? `Page ${page} / Location` : '',
             ].filter(Boolean).join('，')}`)
         } else if (action === 'copy-cfi') {
             try {
                 const cfi = reader.view.getCFI(context.index, context.range)
-                if (!cfi) throw new Error('无法生成位置标识')
+                if (!cfi) throw new Error('Cannot generate CFI identifier')
                 await copyText(cfi)
             } catch (error) {
                 console.warn(error)
-                showToast('当前位置无法生成 EPUB 位置标识')
+                showToast('Cannot generate EPUB CFI at current location')
             }
         } else if (action === 'find') {
             openBookSearch()
@@ -2846,7 +2885,7 @@ $('#annotation-delete').addEventListener('click', async () => {
     const deleted = await reader.deleteAnnotation(currentAnnotation)
     currentAnnotation = null
     $('#annotation-popover').hidden = true
-    showToast('批注已删除', '撤销', () => reader.restoreAnnotation(deleted))
+    showToast('Annotation deleted', 'Undo', () => reader.restoreAnnotation(deleted))
 })
 
 $('#footnote-go').addEventListener('click', () => {
@@ -2871,22 +2910,26 @@ for (const button of $$('[data-preferences-tab]'))
     })
 
 $('#theme-select').addEventListener('change', event => setTheme(event.target.value))
-$('#library-open-mode-select').addEventListener('change', event =>
-    applyLibraryOpenMode(event.target.value))
 $('#language-select').addEventListener('change', event => {
     localStorage.setItem('language', event.target.value)
     applyLanguage(event.target.value)
 })
+$('#library-open-mode-select').addEventListener('change', event =>
+    applyLibraryOpenMode(event.target.value))
+$('#copy-to-library-input').addEventListener('change', event => {
+    copyToLibrary = event.target.checked
+    localStorage.setItem('copy-to-library', String(copyToLibrary))
+})
 $('#cleanup-retained-data').addEventListener('click', cleanupRetainedReadingData)
 $('#cleanup-temporary-files').addEventListener('click', cleanupTemporaryFiles)
 $('#associate-files').addEventListener('click', () => runSystemIntegrationAction(
-    'set_file_associations', { enabled: true }, '已关联支持的文件类型'))
+    'set_file_associations', { enabled: true }, 'File types associated'))
 $('#unassociate-files').addEventListener('click', () => runSystemIntegrationAction(
-    'set_file_associations', { enabled: false }, '已取消文件关联'))
+    'set_file_associations', { enabled: false }, 'File associations removed'))
 $('#create-desktop-shortcut').addEventListener('click', () => runSystemIntegrationAction(
-    'create_desktop_shortcut', {}, '已创建桌面快捷方式'))
+    'create_desktop_shortcut', {}, 'Desktop shortcut created'))
 $('#remove-desktop-shortcut').addEventListener('click', () => runSystemIntegrationAction(
-    'remove_desktop_shortcut', {}, '已移除桌面快捷方式'))
+    'remove_desktop_shortcut', {}, 'Desktop shortcut removed'))
 $('#book-theme-select').addEventListener('change', event =>
     reader.setPreference('bookTheme', event.target.value, 'reader-book-theme'))
 const bindRangePreference = (input, output, property, storageKey, suffix = '', layout = false) =>
@@ -2924,6 +2967,8 @@ $('#reduce-animation-input').addEventListener('change', event =>
         'reader-reduce-animation', true))
 $('#invert-dark-input').addEventListener('change', event =>
     reader.setPreference('invertDark', event.target.checked, 'reader-invert-dark'))
+$('#white-bg-input').addEventListener('change', event =>
+    reader.setPreference('whiteBG', event.target.checked, 'reader-white-bg'))
 $('#autohide-cursor-input').addEventListener('change', event =>
     reader.setPreference('autohideCursor', event.target.checked,
         'reader-autohide-cursor', true))
@@ -2999,7 +3044,7 @@ $('#cfi-paste').addEventListener('click', async () => {
         reader.view?.goTo(value)
     } catch (error) {
         console.warn(error)
-        showToast('无法读取剪贴板')
+        showToast('Cannot read clipboard')
     }
 })
 $('#cfi-go').addEventListener('click', () => reader.view?.goTo($('#cfi-input').value.trim()))
@@ -3061,10 +3106,10 @@ $('#image-copy').addEventListener('click', async () => {
         await navigator.clipboard.write([
             new ClipboardItem({ [imageState.blob.type]: imageState.blob }),
         ])
-        showToast('插图已复制')
+        showToast('Illustration copied')
     } catch (error) {
         console.warn(error)
-        showToast('当前系统不支持复制这张插图')
+        showToast('Current system does not support copying this illustration')
     }
 })
 $('#image-save').addEventListener('click', () => {
@@ -3125,7 +3170,7 @@ document.addEventListener('drop', event => {
         if (libraryOpenMode === 'manual' && files.length === 1 && $('#library-view').hidden)
             openFile(files[0])
         else
-            showToast('桌面版请使用“打开电子书”或“导入图书”按钮，以保存原始文件路径')
+            showToast('Use the "Open Book" or "Import Books" buttons in the desktop edition to preserve the original file path')
     } else if (files.length > 1 || !$('#library-view').hidden) {
         importBooks(files)
     } else {
@@ -3141,7 +3186,7 @@ library.addEventListener('change', async event => {
         reader.syncLibraryData(await library.get(event.detail.id)).catch(console.error)
     else if (event.detail?.type === 'remove' && event.detail.id === reader.bookId) {
         reader.libraryRecord = null
-        showToast('当前图书已在另一个窗口中从书库删除')
+        showToast('Current book was removed from the library in another window')
     }
 })
 
@@ -3155,7 +3200,30 @@ const initializeDesktop = async () => {
         renderSidebarPin()
         await library.open()
         await renderLibrary()
-        applyLanguage(localStorage.getItem('language') || 'zh-CN')
+        applyLanguage(localStorage.getItem('language') || 'en')
+        // Migration: surface records whose original file no longer exists
+        // (typically imported before v0.1.5, when the managed library
+        // folder shipped). Single toast per launch; user can re-import the
+        // missing books via the Import button — once Copy-Books-to-Library
+        // is on (default), the new import survives the original file
+        // moving or being deleted.
+        if (invoke) {
+            try {
+                const records = await library.list()
+                const paths = records.map(record => record.sourcePath).filter(Boolean)
+                if (paths.length) {
+                    const missing = await invoke('missing_book_paths', { paths })
+                    if (missing.length) {
+                        const title = missing.length === 1
+                            ? `${missing.length} book in your library points to a file that has moved or been deleted.`
+                            : `${missing.length} books in your library point to files that have moved or been deleted.`
+                        showToast(`${title} Re-import them via the Import button to keep a managed copy.`)
+                    }
+                }
+            } catch (migrationError) {
+                console.error('Migration scan failed:', migrationError)
+            }
+        }
         const requestedBook = globalThis.__FOLIATE_STARTUP_BOOK__
             || new URLSearchParams(location.search).get('book')
         const requestedPath = globalThis.__FOLIATE_STARTUP_PATH__
@@ -3172,7 +3240,7 @@ const initializeDesktop = async () => {
         if (requestedBook) {
             const record = await library.get(requestedBook)
             if (record) await openLibraryRecord(record)
-            else showOpenError('图书不存在', '书库中找不到请求的图书。',
+            else showOpenError('Book not found', 'The requested book was not found in the library.',
                 new Error(`Missing library record: ${requestedBook}`))
         } else if (requestedPath?.pathHex && Number.isFinite(requestedPath.size)) {
             const bytes = requestedPath.pathHex.match(/.{2}/g) ?? []
@@ -3182,19 +3250,25 @@ const initializeDesktop = async () => {
                 path, Number(requestedPath.size), Number(requestedPath.lastModified) || 0)
             await openFile(file, path.toLowerCase())
         } else if (runtimeInfo?.startupError) {
-            showOpenError('无法打开启动文件', runtimeInfo.startupError,
+            showOpenError('Cannot open startup file', runtimeInfo.startupError,
                 new Error(runtimeInfo.startupError))
         } else if (runtimeInfo?.startupBook
         && Number.isFinite(runtimeInfo.startupBookSize)) {
+            const managedStartup = await syncManagedBook({
+                path: runtimeInfo.startupBook,
+                size: Number(runtimeInfo.startupBookSize),
+                lastModified: 0,
+                name: runtimeInfo.startupBook.split(/[\\/]/).pop() || 'book',
+            })
             const file = new NativeBookFile(
-                runtimeInfo.startupBook,
-                runtimeInfo.startupBookSize,
-                0)
-            await openPickedFile(file, runtimeInfo.startupBook.toLowerCase())
+                managedStartup.path,
+                Number(managedStartup.size),
+                Number(managedStartup.lastModified) || 0)
+            await openPickedFile(file, managedStartup.path.toLowerCase())
         }
     } catch (error) {
         console.error(error)
-        showToast(error?.message || String(error) || '桌面外壳初始化失败')
+        showToast(error?.message || String(error) || 'Desktop shell initialization failed')
     }
 }
 

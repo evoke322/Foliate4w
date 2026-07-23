@@ -1,7 +1,7 @@
 {
   "name": "foliate4w",
   "private": true,
-  "version": "0.1.3",
+  "version": "0.1.5",
   "license": "GPL-3.0-or-later",
   "type": "module",
   "scripts": {
@@ -10,6 +10,8 @@
     "dev": "tauri dev",
     "build": "tauri build --no-bundle",
     "build:portable": "tauri build --no-bundle",
+    "build:installer": "tauri build --bundles nsis --target x86_64-pc-windows-msvc",
+    "build:installer:x86": "tauri build --bundles nsis --target i686-pc-windows-msvc",
     "check": "npm run web:build && cargo check --manifest-path src-tauri/Cargo.toml"
   },
   "dependencies": {

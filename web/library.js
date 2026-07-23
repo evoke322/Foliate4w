@@ -12,9 +12,9 @@ const requestResult = request => new Promise((resolve, reject) => {
 const transactionDone = transaction => new Promise((resolve, reject) => {
     transaction.addEventListener('complete', resolve, { once: true })
     transaction.addEventListener('abort',
-        () => reject(transaction.error ?? new Error('数据库事务已取消')), { once: true })
+        () => reject(transaction.error ?? new Error('Database transaction was aborted')), { once: true })
     transaction.addEventListener('error',
-        () => reject(transaction.error ?? new Error('数据库事务失败')), { once: true })
+        () => reject(transaction.error ?? new Error('Database transaction failed')), { once: true })
 })
 
 const hash = async value => {

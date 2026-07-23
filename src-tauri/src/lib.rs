@@ -85,20 +85,20 @@ fn is_supported_book(path: &Path) -> bool {
 fn canonical_book_path(path: impl AsRef<Path>) -> Result<PathBuf, String> {
     let path = path.as_ref();
     if !path.exists() {
-        return Err(format!("图书文件不存在：{}", path.display()));
+        return Err(format!("Book file does not exist: {}", path.display()));
     }
     let path = path
         .canonicalize()
-        .map_err(|error| format!("无法解析图书路径：{error}"))?;
+        .map_err(|error| format!("Cannot resolve book path: {error}"))?;
     if !is_supported_book(&path) {
-        return Err(format!("不支持的图书格式：{}", path.display()));
+        return Err(format!("Unsupported book format: {}", path.display()));
     }
     Ok(path)
 }
 
 fn book_path_info(path: impl AsRef<Path>) -> Result<BookPathInfo, String> {
     let path = canonical_book_path(path)?;
-    let metadata = fs::metadata(&path).map_err(|error| format!("无法读取图书信息：{error}"))?;
+    let metadata = fs::metadata(&path).map_err(|error| format!("Cannot read book info: {error}"))?;
     let last_modified = metadata
         .modified()
         .ok()
@@ -138,36 +138,37 @@ fn startup_book() -> (Option<PathBuf>, Option<String>) {
     if !path.exists() {
         return (
             None,
-            Some(format!("启动参数指定的文件不存在：{}", path.display())),
+            Some(format!("File specified by startup argument does not exist: {}", path.display())),
         );
     }
     if !is_supported_book(&path) {
-        return (None, Some(format!("不支持的图书格式：{}", path.display())));
+        return (None, Some(format!("Unsupported book format: {}", path.display())));
     }
     (path.canonicalize().ok().or(Some(path)), None)
 }
 
 fn prepare_runtime() -> Result<RuntimeState, String> {
     let executable =
-        std::env::current_exe().map_err(|error| format!("无法确定程序位置：{error}"))?;
+        std::env::current_exe()
+        .map_err(|error| format!("Cannot determine program location: {error}"))?;
     let executable_dir = executable
         .parent()
-        .ok_or_else(|| "无法确定程序所在目录".to_string())?
+        .ok_or_else(|| "Cannot determine program directory".to_string())?
         .to_path_buf();
     let portable = executable_dir.join("portable.flag").is_file();
 
     let data_dir = if portable {
         let root = executable_dir.join("Data");
         for child in [
-            "cache", "config", "covers", "library", "logs", "temp", "WebView2",
+            "books", "cache", "config", "covers", "library", "logs", "temp", "WebView2",
         ] {
             fs::create_dir_all(root.join(child))
-                .map_err(|error| format!("无法创建 Data\\{child}：{error}"))?;
+                .map_err(|error| format!("Cannot create Data\\{child}: {error}"))?;
         }
         let initialized = root.join(".initialized");
         if !initialized.exists() {
             fs::write(&initialized, b"Foliate Portable data directory\n")
-                .map_err(|error| format!("绿色版所在目录不可写：{error}"))?;
+                .map_err(|error| format!("Portable edition directory is not writable: {error}"))?;
         }
 
         let temp = root.join("temp");
@@ -175,7 +176,7 @@ fn prepare_runtime() -> Result<RuntimeState, String> {
         std::env::set_var("TMP", &temp);
         std::env::set_var("WEBVIEW2_USER_DATA_FOLDER", root.join("WebView2"));
         std::env::set_current_dir(&executable_dir)
-            .map_err(|error| format!("无法切换到绿色版目录：{error}"))?;
+            .map_err(|error| format!("Cannot change to portable edition directory: {error}"))?;
         Some(root)
     } else {
         None
@@ -188,6 +189,74 @@ fn prepare_runtime() -> Result<RuntimeState, String> {
         startup_book,
         startup_error,
     })
+}
+
+// Managed "library folder" — a per-installation directory under our own
+// control where we copy imported books so the reader keeps working after
+// the user moves or deletes the original file. Portable: `Data/books/`
+// (created by prepare_runtime alongside the rest of the portable tree).
+// Installed: `%LOCALAPPDATA%\Foliate\books\`.
+fn library_books_dir(state: &RuntimeState) -> Result<PathBuf, String> {
+    if let Some(data_dir) = state.data_dir.as_ref() {
+        return Ok(data_dir.join("books"));
+    }
+    let base = std::env::var_os("LOCALAPPDATA")
+        .ok_or_else(|| "LOCALAPPDATA is not set".to_string())?;
+    Ok(PathBuf::from(base).join("Foliate").join("books"))
+}
+
+// ponytail: monotonically-incrementing `_N` suffix on file-name collisions.
+// O(n) scan of existing files; fine while a user imports tens to hundreds
+// of books into one flat directory. If this ever becomes hot, switch to a
+// book-id-keyed subfolder layout (one rename instead of a scan).
+fn unique_library_book_path(dir: &Path, file_name: Option<&OsStr>) -> Result<PathBuf, String> {
+    let name = file_name.and_then(OsStr::to_str).unwrap_or("book");
+    let path = Path::new(name);
+    let stem = path.file_stem().and_then(OsStr::to_str).unwrap_or("book");
+    let ext = path.extension().and_then(OsStr::to_str).unwrap_or("");
+    let mut candidate = dir.join(name);
+    let mut counter = 1;
+    while candidate.exists() {
+        counter += 1;
+        if counter > 9999 {
+            return Err("Too many file name collisions in books directory".to_string());
+        }
+        let new_name = if ext.is_empty() {
+            format!("{stem}_{counter}")
+        } else {
+            format!("{stem}_{counter}.{ext}")
+        };
+        candidate = dir.join(new_name);
+    }
+    Ok(candidate)
+}
+
+#[tauri::command]
+fn import_book_to_library(
+    src_path: String,
+    state: State<'_, RuntimeState>,
+) -> Result<BookPathInfo, String> {
+    let src = canonical_book_path(&src_path)?;
+    let dir = library_books_dir(&state)?;
+    fs::create_dir_all(&dir)
+        .map_err(|error| format!("Cannot create books directory: {error}"))?;
+    // Self-copy guard: if the user re-imports a file we already manage,
+    // fs::copy would otherwise try to copy a file onto itself, which
+    // Windows rejects with a sharing violation.
+    let dest = if src.parent().map(|parent| parent == dir).unwrap_or(false) {
+        src
+    } else {
+        let dest = unique_library_book_path(&dir, src.file_name())?;
+        fs::copy(&src, &dest)
+            .map_err(|error| format!("Cannot copy book to library folder: {error}"))?;
+        dest
+    };
+    book_path_info(&dest)
+}
+
+#[tauri::command]
+fn missing_book_paths(paths: Vec<String>) -> Vec<String> {
+    paths.into_iter().filter(|path| !Path::new(path).is_file()).collect()
 }
 
 #[cfg(target_os = "windows")]
@@ -252,7 +321,7 @@ fn hidden_command_output(program: &str, args: &[String]) -> Result<Output, Strin
         .args(args)
         .creation_flags(CREATE_NO_WINDOW)
         .output()
-        .map_err(|error| format!("无法运行 {program}：{error}"))
+        .map_err(|error| format!("Cannot run {program}: {error}"))
 }
 
 #[cfg(target_os = "windows")]
@@ -263,7 +332,7 @@ fn checked_command(program: &str, args: &[String]) -> Result<Output, String> {
     } else {
         let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();
         Err(if detail.is_empty() {
-            format!("{program} 执行失败：{}", output.status)
+            format!("{program} failed: {}", output.status)
         } else {
             detail
         })
@@ -327,7 +396,7 @@ fn notify_file_association_changed() {
 fn current_executable() -> Result<PathBuf, String> {
     std::env::current_exe()
         .and_then(|path| path.canonicalize())
-        .map_err(|error| format!("无法确定 Foliate 程序位置：{error}"))
+        .map_err(|error| format!("Cannot determine Foliate program location: {error}"))
 }
 
 #[cfg(target_os = "windows")]
@@ -338,7 +407,7 @@ fn set_file_associations(enabled: bool) -> Result<(), String> {
     let executable_name = executable
         .file_name()
         .and_then(OsStr::to_str)
-        .ok_or_else(|| "无法确定 Foliate 程序文件名".to_string())?;
+        .ok_or_else(|| "Cannot determine Foliate program filename".to_string())?;
     let classes = r"HKCU\Software\Classes";
     let progid_key = format!(r"{classes}\{FOLIATE_PROGID}");
     let application_key = format!(r"{classes}\Applications\{executable_name}");
@@ -404,13 +473,13 @@ fn powershell_shortcut_output(script: &str) -> Result<Output, String> {
         .creation_flags(CREATE_NO_WINDOW);
     let output = command
         .output()
-        .map_err(|error| format!("无法启动 Windows PowerShell：{error}"))?;
+        .map_err(|error| format!("Cannot start Windows PowerShell: {error}"))?;
     if output.status.success() {
         Ok(output)
     } else {
         let detail = String::from_utf8_lossy(&output.stderr).trim().to_string();
         Err(if detail.is_empty() {
-            "无法管理桌面快捷方式".to_string()
+            "Cannot manage desktop shortcut".to_string()
         } else {
             detail
         })
@@ -428,7 +497,7 @@ $shell=New-Object -ComObject WScript.Shell
 if (Test-Path -LiteralPath $link) {
   $existing=$shell.CreateShortcut($link)
   if ([IO.Path]::GetFullPath($existing.TargetPath) -cne [IO.Path]::GetFullPath($target)) {
-    throw '桌面已存在指向其他程序的 Foliate.lnk，未覆盖该快捷方式。'
+    throw 'A Foliate shortcut pointing to a different program already exists on the desktop. The shortcut was not overwritten.'
   }
 }
 $shortcut=$shell.CreateShortcut($link)
@@ -453,7 +522,7 @@ if (Test-Path -LiteralPath $link) {
   $shell=New-Object -ComObject WScript.Shell
   $shortcut=$shell.CreateShortcut($link)
   if ([IO.Path]::GetFullPath($shortcut.TargetPath) -cne [IO.Path]::GetFullPath($target)) {
-    throw 'Foliate.lnk 指向其他程序，未移除该快捷方式。'
+    throw 'Foliate.lnk points to a different program. The shortcut was not removed.'
   }
   Remove-Item -LiteralPath $link -Force
 }"#,
@@ -490,19 +559,19 @@ if ($actual -ceq $target) { exit 0 } else { exit 1 }"#,
 #[cfg(not(target_os = "windows"))]
 #[tauri::command]
 fn set_file_associations(_enabled: bool) -> Result<(), String> {
-    Err("当前平台不支持 Windows 文件关联".to_string())
+    Err("Windows file association is not supported on this platform".to_string())
 }
 
 #[cfg(not(target_os = "windows"))]
 #[tauri::command]
 fn create_desktop_shortcut() -> Result<String, String> {
-    Err("当前平台不支持 Windows 桌面快捷方式".to_string())
+    Err("Windows desktop shortcut is not supported on this platform".to_string())
 }
 
 #[cfg(not(target_os = "windows"))]
 #[tauri::command]
 fn remove_desktop_shortcut() -> Result<(), String> {
-    Err("当前平台不支持 Windows 桌面快捷方式".to_string())
+    Err("Windows desktop shortcut is not supported on this platform".to_string())
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -639,16 +708,16 @@ fn choose_books(multiple: bool) -> Result<Vec<BookPathInfo>, String> {
     };
 
     let filter: Vec<u16> = OsStr::new(
-        "电子书 (*.epub;*.mobi;*.azw;*.azw3;*.fb2;*.fbz;*.zip;*.cbz;*.pdf)\0\
-         *.epub;*.mobi;*.azw;*.azw3;*.fb2;*.fbz;*.zip;*.cbz;*.pdf\0所有文件 (*.*)\0*.*\0",
+        "E-books (*.epub;*.mobi;*.azw;*.azw3;*.fb2;*.fbz;*.zip;*.cbz;*.pdf)\0\
+         *.epub;*.mobi;*.azw;*.azw3;*.fb2;*.fbz;*.zip;*.cbz;*.pdf\0All files (*.*)\0*.*\0",
     )
     .encode_wide()
     .chain(iter::once(0))
     .collect();
     let title: Vec<u16> = OsStr::new(if multiple {
-        "导入图书到书库"
+        "Import Books to Library"
     } else {
-        "打开电子书"
+        "Open Book"
     })
     .encode_wide()
     .chain(iter::once(0))
@@ -674,7 +743,7 @@ fn choose_books(multiple: bool) -> Result<Vec<BookPathInfo>, String> {
         return if error == 0 {
             Ok(Vec::new())
         } else {
-            Err(format!("Windows 文件选择器错误：0x{error:04X}"))
+            Err(format!("Windows file chooser error: 0x{error:04X}"))
         };
     }
 
@@ -698,7 +767,7 @@ fn choose_books(multiple: bool) -> Result<Vec<BookPathInfo>, String> {
 #[cfg(not(target_os = "windows"))]
 #[tauri::command]
 fn choose_books(_multiple: bool) -> Result<Vec<BookPathInfo>, String> {
-    Err("当前平台不支持 Windows 文件选择器".to_string())
+    Err("Windows file chooser is not supported on this platform".to_string())
 }
 
 #[tauri::command]
@@ -719,7 +788,7 @@ async fn new_window(
             if valid {
                 Ok(book_id)
             } else {
-                Err("无效的书库图书标识".to_string())
+                Err("Invalid library book identifier".to_string())
             }
         })
         .transpose()?;
@@ -760,19 +829,19 @@ async fn new_window(
 fn read_book_range(path: String, begin: u64, end: u64) -> Result<Response, String> {
     let path = canonical_book_path(path)?;
     let size = fs::metadata(&path)
-        .map_err(|error| format!("无法读取图书信息：{error}"))?
+        .map_err(|error| format!("Cannot read book info: {error}"))?
         .len();
     if begin > end || end > size {
-        return Err(format!("无效的图书读取范围：{begin}..{end} / {size}"));
+        return Err(format!("Invalid book read range: {begin}..{end} / {size}"));
     }
 
-    let length = usize::try_from(end - begin).map_err(|_| "请求的图书数据块过大".to_string())?;
+    let length = usize::try_from(end - begin).map_err(|_| "Requested book data chunk is too large".to_string())?;
     let mut bytes = vec![0; length];
-    let mut file = File::open(path).map_err(|error| format!("无法打开图书：{error}"))?;
+    let mut file = File::open(path).map_err(|error| format!("Cannot open book: {error}"))?;
     file.seek(SeekFrom::Start(begin))
-        .map_err(|error| format!("无法定位图书数据：{error}"))?;
+        .map_err(|error| format!("Cannot seek book data: {error}"))?;
     file.read_exact(&mut bytes)
-        .map_err(|error| format!("无法读取图书数据：{error}"))?;
+        .map_err(|error| format!("Cannot read book data: {error}"))?;
     Ok(Response::new(bytes))
 }
 
@@ -783,7 +852,7 @@ fn open_external(url: String) -> Result<(), String> {
     use windows_sys::Win32::UI::Shell::ShellExecuteW;
 
     if !(url.starts_with("https://") || url.starts_with("http://")) {
-        return Err("只允许打开 HTTP 或 HTTPS 链接".to_string());
+        return Err("Only HTTP or HTTPS links are allowed".to_string());
     }
     let operation: Vec<u16> = OsStr::new("open")
         .encode_wide()
@@ -804,7 +873,7 @@ fn open_external(url: String) -> Result<(), String> {
         )
     };
     if result as isize <= 32 {
-        Err("无法使用系统浏览器打开链接".to_string())
+        Err("Cannot open link in system browser".to_string())
     } else {
         Ok(())
     }
@@ -835,7 +904,7 @@ fn shell_open_path(path: &Path) -> Result<(), String> {
         )
     };
     if result as isize <= 32 {
-        Err("无法使用系统默认程序打开图书".to_string())
+        Err("Cannot open book with system default program".to_string())
     } else {
         Ok(())
     }
@@ -851,13 +920,13 @@ fn open_book_path(path: String) -> Result<(), String> {
 #[cfg(not(target_os = "windows"))]
 #[tauri::command]
 fn open_external(_url: String) -> Result<(), String> {
-    Err("当前平台不支持打开外部链接".to_string())
+    Err("Opening external links is not supported on this platform".to_string())
 }
 
 #[cfg(not(target_os = "windows"))]
 #[tauri::command]
 fn open_book_path(_path: String) -> Result<(), String> {
-    Err("当前平台不支持使用外部程序打开图书".to_string())
+    Err("Opening books with external programs is not supported on this platform".to_string())
 }
 
 fn remove_directory_contents(path: &Path) -> Result<CleanupResult, String> {
@@ -925,7 +994,9 @@ pub fn run() {
             read_book_range,
             open_external,
             open_book_path,
-            clean_temporary_files
+            clean_temporary_files,
+            import_book_to_library,
+            missing_book_paths
         ])
         .setup(move |app| {
             let mut window =
@@ -947,6 +1018,6 @@ pub fn run() {
         .run(tauri::generate_context!());
 
     if let Err(error) = result {
-        show_fatal_error(&format!("Foliate 启动失败：{error}"));
+        show_fatal_error(&format!("Foliate failed to start: {error}"));
     }
 }
