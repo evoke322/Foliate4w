@@ -74,6 +74,8 @@ in the upstream project.
 - Local library with multi-book import, grid/list views, metadata search,
   covers, progress, stable book identity, and multi-window synchronization
 - Configurable open-and-auto-import or open-with-manual-import library behavior
+- Optional "Copy Books to Library Folder" (default on) — managed copies keep
+  library entries openable after the original file is moved or deleted
 - Explicit per-user file-association controls and desktop-shortcut management
 - Bookmarks and searchable annotation lists
 - Highlights, underline/squiggly/strikethrough styles, custom colors,
@@ -98,11 +100,17 @@ The original Foliate still has features not yet ported completely, including a
 full text-to-speech controller, media overlays, and OPDS catalogs.
 
 Desktop builds store the original Windows path for an imported library book,
-not another copy of the complete book. IndexedDB contains that path together
-with the cover, metadata, progress, bookmarks, and annotations. In the portable
-edition this database remains under `Data/WebView2`. Moving or deleting the
-original book makes the library link unavailable until the file is imported
-again. The settings page can remove retained reading data and temporary files.
+not another copy of the complete book — *unless* **Copy Books to Library
+Folder** is on (default). When it is, every book picked through the native
+file picker or opened via file association is first copied into Foliate's
+managed library folder (`Data/books/` portable, `%LOCALAPPDATA%\Foliate\books\`
+installed) before being imported or read. The library record (in IndexedDB,
+kept under `Data/WebView2` on the portable edition) then points at the managed
+copy, so moving or deleting the original file does not break the library link.
+Turning the preference off reverts to the v0.1.4 behaviour — the record keeps
+the original path and stops opening once that file moves. Either way, IndexedDB
+also carries the cover, metadata, progress, bookmarks, and annotations, and
+the settings page can remove retained reading data and temporary files.
 
 ## Windows Package
 

@@ -1172,6 +1172,30 @@ let libraryListView = localStorage.getItem('library-view') === 'list'
 let libraryOpenMode = localStorage.getItem('library-open-mode') === 'manual'
     ? 'manual'
     : 'auto-import'
+// Copy-Books-to-Library: opt-out (default on). When true, every book picked
+// through the system file picker, or opened via file association on launch,
+// is copied into Foliate's managed library folder before being imported or
+// read, so the library entry survives the original file being moved or
+// deleted. The managed folder is `Data/books/` (portable) or
+// `%LOCALAPPDATA%\Foliate\books\` (installed), handled by the Rust
+// `import_book_to_library` command.
+let copyToLibrary = localStorage.getItem('copy-to-library') !== 'false'
+
+// Returns a BookPathInfo pointing at the managed copy when the feature is on,
+// or the original info unchanged when off. Failure to copy falls back to the
+// original path so the book still tries to open.
+const syncManagedBook = async info => {
+    if (!invoke || !copyToLibrary || !info?.path) return info
+    try {
+        return await invoke('import_book_to_library', { srcPath: info.path })
+    } catch (error) {
+        console.error('Cannot copy book to library folder:', error)
+        const label = info?.name ?? info.path
+        showToast(`Cannot copy "${label}" to library folder: ${error?.message || String(error)}. Opening from original location.`)
+        return info
+    }
+}
+
 let sidebarPinned = storedBoolean('sidebar-pinned', true)
 let selectionContext = null
 let currentAnnotation = null
@@ -1606,7 +1630,10 @@ const chooseFile = async () => {
     }
     try {
         const [info] = await invoke('choose_books', { multiple: false })
-        if (info) await openPickedFile(nativeBookFromInfo(info), info.path.toLowerCase())
+        if (info) {
+            const managed = await syncManagedBook(info)
+            await openPickedFile(nativeBookFromInfo(managed), managed.path.toLowerCase())
+        }
     } catch (error) {
         showToast(error?.message || String(error))
     }
@@ -1618,7 +1645,9 @@ const chooseImport = async () => {
     }
     try {
         const infos = await invoke('choose_books', { multiple: true })
-        await importBooks(infos.map(nativeBookFromInfo))
+        const managed = []
+        for (const info of infos) managed.push(await syncManagedBook(info))
+        await importBooks(managed.map(nativeBookFromInfo))
     } catch (error) {
         showToast(error?.message || String(error))
     }
@@ -2213,6 +2242,7 @@ const setRangeControl = (id, outputId, value, suffix = '') => {
 const syncPreferenceControls = () => {
     $('#language-select').value = localStorage.getItem('language') || 'en'
     $('#library-open-mode-select').value = libraryOpenMode
+    $('#copy-to-library-input').checked = copyToLibrary
     $('#book-theme-select').value = reader.bookTheme
     setRangeControl('#font-size-input', '#font-size-output', reader.fontSize, ' px')
     setRangeControl('#minimum-font-size-input', '#minimum-font-size-output',
@@ -2394,6 +2424,8 @@ const chineseText = {
     'Open and Import Automatically': '打开并自动导入书库',
     'Open Only; Import Manually': '仅打开，按需手动导入',
     'Auto-import keeps one open entry; manual mode shows separate Open and Import actions.': '自动导入模式保留一个书库入口；手动模式会同时显示“打开”和“导入”两个入口。',
+    'Copy Books to Library Folder': '复制图书到书库文件夹',
+    'When on, a managed copy of each imported book lives in the Foliate library folder so the book stays openable after the original file is moved or deleted. Default is on.': '启用后，每本导入图书的托管副本会保留在 Foliate 书库文件夹中，即使原文件被移动或删除，该图书仍可继续打开。默认为开启状态。',
     'Storage Cleanup': '存储清理',
     'Clear Retained Reading Data': '清理已移除图书的阅读数据',
     'Clear Temporary Files': '清理临时文件',
@@ -2551,9 +2583,9 @@ const showShortcuts = () => {
 }
 
 const showAbout = () => {
-    $('#about-version').textContent = runtimeInfo?.version ?? '0.1.4'
+    $('#about-version').textContent = runtimeInfo?.version ?? '0.1.5'
     $('#debug-info').textContent = [
-        `Version: ${runtimeInfo?.version ?? '0.1.4'}`,
+        `Version: ${runtimeInfo?.version ?? '0.1.5'}`,
         `Edition: ${runtimeInfo?.portable ? 'Portable' : invoke ? 'Desktop development' : 'Browser'}`,
         `Platform: ${navigator.platform}`,
         `User agent: ${navigator.userAgent}`,
@@ -2883,6 +2915,10 @@ $('#language-select').addEventListener('change', event => {
 })
 $('#library-open-mode-select').addEventListener('change', event =>
     applyLibraryOpenMode(event.target.value))
+$('#copy-to-library-input').addEventListener('change', event => {
+    copyToLibrary = event.target.checked
+    localStorage.setItem('copy-to-library', String(copyToLibrary))
+})
 $('#cleanup-retained-data').addEventListener('click', cleanupRetainedReadingData)
 $('#cleanup-temporary-files').addEventListener('click', cleanupTemporaryFiles)
 $('#associate-files').addEventListener('click', () => runSystemIntegrationAction(
@@ -3164,6 +3200,29 @@ const initializeDesktop = async () => {
         await library.open()
         await renderLibrary()
         applyLanguage(localStorage.getItem('language') || 'en')
+        // Migration: surface records whose original file no longer exists
+        // (typically imported before v0.1.5, when the managed library
+        // folder shipped). Single toast per launch; user can re-import the
+        // missing books via the Import button — once Copy-Books-to-Library
+        // is on (default), the new import survives the original file
+        // moving or being deleted.
+        if (invoke) {
+            try {
+                const records = await library.list()
+                const paths = records.map(record => record.sourcePath).filter(Boolean)
+                if (paths.length) {
+                    const missing = await invoke('missing_book_paths', { paths })
+                    if (missing.length) {
+                        const title = missing.length === 1
+                            ? `${missing.length} book in your library points to a file that has moved or been deleted.`
+                            : `${missing.length} books in your library point to files that have moved or been deleted.`
+                        showToast(`${title} Re-import them via the Import button to keep a managed copy.`)
+                    }
+                }
+            } catch (migrationError) {
+                console.error('Migration scan failed:', migrationError)
+            }
+        }
         const requestedBook = globalThis.__FOLIATE_STARTUP_BOOK__
             || new URLSearchParams(location.search).get('book')
         const requestedPath = globalThis.__FOLIATE_STARTUP_PATH__
@@ -3194,11 +3253,17 @@ const initializeDesktop = async () => {
                 new Error(runtimeInfo.startupError))
         } else if (runtimeInfo?.startupBook
         && Number.isFinite(runtimeInfo.startupBookSize)) {
+            const managedStartup = await syncManagedBook({
+                path: runtimeInfo.startupBook,
+                size: Number(runtimeInfo.startupBookSize),
+                lastModified: 0,
+                name: runtimeInfo.startupBook.split(/[\\/]/).pop() || 'book',
+            })
             const file = new NativeBookFile(
-                runtimeInfo.startupBook,
-                runtimeInfo.startupBookSize,
-                0)
-            await openPickedFile(file, runtimeInfo.startupBook.toLowerCase())
+                managedStartup.path,
+                Number(managedStartup.size),
+                Number(managedStartup.lastModified) || 0)
+            await openPickedFile(file, managedStartup.path.toLowerCase())
         }
     } catch (error) {
         console.error(error)

@@ -160,7 +160,7 @@ fn prepare_runtime() -> Result<RuntimeState, String> {
     let data_dir = if portable {
         let root = executable_dir.join("Data");
         for child in [
-            "cache", "config", "covers", "library", "logs", "temp", "WebView2",
+            "books", "cache", "config", "covers", "library", "logs", "temp", "WebView2",
         ] {
             fs::create_dir_all(root.join(child))
                 .map_err(|error| format!("Cannot create Data\\{child}: {error}"))?;
@@ -189,6 +189,74 @@ fn prepare_runtime() -> Result<RuntimeState, String> {
         startup_book,
         startup_error,
     })
+}
+
+// Managed "library folder" — a per-installation directory under our own
+// control where we copy imported books so the reader keeps working after
+// the user moves or deletes the original file. Portable: `Data/books/`
+// (created by prepare_runtime alongside the rest of the portable tree).
+// Installed: `%LOCALAPPDATA%\Foliate\books\`.
+fn library_books_dir(state: &RuntimeState) -> Result<PathBuf, String> {
+    if let Some(data_dir) = state.data_dir.as_ref() {
+        return Ok(data_dir.join("books"));
+    }
+    let base = std::env::var_os("LOCALAPPDATA")
+        .ok_or_else(|| "LOCALAPPDATA is not set".to_string())?;
+    Ok(PathBuf::from(base).join("Foliate").join("books"))
+}
+
+// ponytail: monotonically-incrementing `_N` suffix on file-name collisions.
+// O(n) scan of existing files; fine while a user imports tens to hundreds
+// of books into one flat directory. If this ever becomes hot, switch to a
+// book-id-keyed subfolder layout (one rename instead of a scan).
+fn unique_library_book_path(dir: &Path, file_name: Option<&OsStr>) -> Result<PathBuf, String> {
+    let name = file_name.and_then(OsStr::to_str).unwrap_or("book");
+    let path = Path::new(name);
+    let stem = path.file_stem().and_then(OsStr::to_str).unwrap_or("book");
+    let ext = path.extension().and_then(OsStr::to_str).unwrap_or("");
+    let mut candidate = dir.join(name);
+    let mut counter = 1;
+    while candidate.exists() {
+        counter += 1;
+        if counter > 9999 {
+            return Err("Too many file name collisions in books directory".to_string());
+        }
+        let new_name = if ext.is_empty() {
+            format!("{stem}_{counter}")
+        } else {
+            format!("{stem}_{counter}.{ext}")
+        };
+        candidate = dir.join(new_name);
+    }
+    Ok(candidate)
+}
+
+#[tauri::command]
+fn import_book_to_library(
+    src_path: String,
+    state: State<'_, RuntimeState>,
+) -> Result<BookPathInfo, String> {
+    let src = canonical_book_path(&src_path)?;
+    let dir = library_books_dir(&state)?;
+    fs::create_dir_all(&dir)
+        .map_err(|error| format!("Cannot create books directory: {error}"))?;
+    // Self-copy guard: if the user re-imports a file we already manage,
+    // fs::copy would otherwise try to copy a file onto itself, which
+    // Windows rejects with a sharing violation.
+    let dest = if src.parent().map(|parent| parent == dir).unwrap_or(false) {
+        src
+    } else {
+        let dest = unique_library_book_path(&dir, src.file_name())?;
+        fs::copy(&src, &dest)
+            .map_err(|error| format!("Cannot copy book to library folder: {error}"))?;
+        dest
+    };
+    book_path_info(&dest)
+}
+
+#[tauri::command]
+fn missing_book_paths(paths: Vec<String>) -> Vec<String> {
+    paths.into_iter().filter(|path| !Path::new(path).is_file()).collect()
 }
 
 #[cfg(target_os = "windows")]
@@ -926,7 +994,9 @@ pub fn run() {
             read_book_range,
             open_external,
             open_book_path,
-            clean_temporary_files
+            clean_temporary_files,
+            import_book_to_library,
+            missing_book_paths
         ])
         .setup(move |app| {
             let mut window =

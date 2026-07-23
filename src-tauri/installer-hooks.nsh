@@ -58,5 +58,9 @@
   RMDir /r "$LOCALAPPDATA\com.github.evoke322.foliate4w"
   RMDir /r "$LOCALAPPDATA\${PRODUCTNAME}"
 
+  ; Remove the managed "books" folder created by the Copy-Books-to-Library
+  ; feature so the system is left clean. The directory is %LOCALAPPDATA%\Foliate.
+  RMDir /r "$LOCALAPPDATA\Foliate"
+
   !insertmacro UPDATEFILEASSOC
 !macroend

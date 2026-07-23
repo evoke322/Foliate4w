@@ -109,7 +109,7 @@ jobs:
 
           $data = Join-Path $portable 'Data'
           foreach ($directory in @(
-            'cache', 'config', 'covers', 'library', 'logs', 'temp', 'WebView2'
+            'books', 'cache', 'config', 'covers', 'library', 'logs', 'temp', 'WebView2'
           )) {
             New-Item -ItemType Directory -Force -Path (Join-Path $data $directory) | Out-Null
           }

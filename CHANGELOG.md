@@ -9,6 +9,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _Nothing yet._
 
+## [0.1.5] - 2026-07-22
+
+### Added
+
+- **Copy Books to Library Folder** — an opt-out preference under
+  **Settings → Interface → Library Behavior** (default on). When on, every
+  book picked through the native Windows file picker, or opened via file
+  association on launch, is copied into Foliate's managed library folder
+  before being imported or read. The library entry then stays openable after
+  the original file is moved or deleted — fixing the longest-standing
+  complaint about the desktop edition's library links. Persistence key is
+  `localStorage['copy-to-library']`; setting it to `'false'` turns the
+  feature off and uses the original file's path the way v0.1.4 did.
+- Managed library folder:
+  - **Portable**: `Data/books/` (created by `prepare_runtime` alongside the
+    other portable subdirectories, never touches anything outside `Data`).
+  - **Installed**: `%LOCALAPPDATA%\Foliate\books\`, removed by the NSIS
+    uninstall hook on `NSIS_HOOK_PREUNINSTALL`.
+- New Rust command `import_book_to_library(srcPath)` — resolves the runtime
+  managed folder, deduplicates filename collisions with a `<stem>_N` suffix
+  (flat scheme), guards against copying a file onto itself, and returns the
+  same `BookPathInfo` shape as `choose_books` so the JS side treats the
+  copy as the source of truth going forward.
+- New Rust command `missing_book_paths(paths)` — batch existence check
+  used by the one-time migration scan.
+- **One-time migration prompt**: on launch, the desktop shell calls
+  `missing_book_paths` with every library record's `sourcePath`. Records
+  whose file no longer exists produce a single toast informing the user that
+  re-importing (via the Import button) will keep a managed copy going
+  forward. Existing records that still point at live files keep working
+  unchanged.
+- New `chineseText` entries for the new label and its preference note.
+
+### Changed
+
+- The library record's `sourcePath` field now points at the managed copy
+  (replace semantics, not fallback) when the feature is on. The original
+  path is no longer retained; the managed copy is the single source of
+  truth. Re-importing the same file is idempotent (a self-copy guard skips
+  the copy when the source is already inside the managed folder).
+- Version bump 0.1.4 → 0.1.5 across `package.json`, `package-lock.json`
+  (two spots), `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`,
+  `src-tauri/Cargo.lock` (foliate4w stanza), and the `'0.1.x'` fallbacks
+  in `web/main.js` `showAbout()`.
+
 ## [0.1.4] - 2026-07-21
 
 ### Added
@@ -94,5 +139,6 @@ _Nothing yet._
   into the same `TypeError`. Applies to both the import/inspection path
   and the reader's `close()` cleanup.
 
+[0.1.5]: https://github.com/vihaanvp/Foliate4w/releases/tag/v0.1.5
 [0.1.4]: https://github.com/vihaanvp/Foliate4w/releases/tag/v0.1.4
-[Unreleased]: https://github.com/vihaanvp/Foliate4w/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/vihaanvp/Foliate4w/compare/v0.1.5...HEAD
