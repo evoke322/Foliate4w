@@ -35,6 +35,17 @@ GJS, libadwaita, WebKitGTK, Electron, and bundled Chromium runtimes.
   on demand, stores per-user settings under `%LOCALAPPDATA%`, and uninstalls
   cleanly.
 
+## AI-Assisted Development
+
+All contributions by vihaanvp to this project were made using OpenCode,
+an AI coding agent. This applies to the v0.1.4, v0.1.5, and any future
+commits on the
+[vihaanvp/Foliate4w](https://github.com/vihaanvp/Foliate4w) fork. The
+vendored `foliate-js` engine is unchanged from the upstream MIT project —
+only the desktop shell, packaging, installer, and preferences are
+AI-assisted. Upstream maintainers reviewing this work should treat the
+contributions accordingly.
+
 ## Book Formats
 
 - EPUB

@@ -2593,6 +2593,7 @@ const showAbout = () => {
         `Online: ${navigator.onLine}`,
         `Data directory: ${runtimeInfo?.dataDir ?? 'WebView profile / browser storage'}`,
         `Current book ID: ${reader.bookId ?? 'None'}`,
+        `Contributions: vihaanvp with OpenCode (AI coding agent)`,
     ].join('\n')
     $('#about-dialog').showModal()
 }

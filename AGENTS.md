@@ -177,3 +177,13 @@ installer variant.
   object-URL path, revoke it along the same pattern you find nearby.
 - Fork relationship: this repo is a fork of `evoke322/Foliate4w`. Don't push
   to upstream; raise PRs against the user's fork unless told otherwise.
+
+## Disclosure
+
+All contributions by vihaanvp to this project were made using OpenCode,
+an AI coding agent. This applies to the v0.1.4, v0.1.5, and any future
+commits on the [vihaanvp/Foliate4w](https://github.com/vihaanvp/Foliate4w)
+fork. The vendored `foliate-js` engine is unchanged from the upstream MIT
+project — only the desktop shell, packaging, installer, and preferences
+are AI-assisted. This file (`AGENTS.md`) is itself a product of those
+OpenCode sessions.

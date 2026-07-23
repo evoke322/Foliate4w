@@ -13,6 +13,17 @@ _Nothing yet._
 
 ### Added
 
+- **AI-assistance disclosure** — all contributions by vihaanvp to this
+  project were made using OpenCode, an AI coding agent. This applies to
+  the v0.1.4, v0.1.5, and any future commits on the
+  [vihaanvp/Foliate4w](https://github.com/vihaanvp/Foliate4w) fork. The
+  disclosure appears in `README.md` ("AI-Assisted Development" section),
+  this entry, the project footer in `AGENTS.md`, the **About** dialog in
+  the application, the debug info shown by that dialog, the PR
+  description, the v0.1.5 release notes, and the commit body for this
+  change. The vendored `foliate-js` engine is unchanged from the upstream
+  MIT project; only the desktop shell, packaging, installer, and
+  preferences are AI-assisted.
 - **Copy Books to Library Folder** — an opt-out preference under
   **Settings → Interface → Library Behavior** (default on). When on, every
   book picked through the native Windows file picker, or opened via file
